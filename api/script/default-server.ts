@@ -59,9 +59,11 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
     })
     .then(() => {
       const app = express();
-      // Trust the reverse proxy (e.g., Nginx/ALB/Cloudflare) so req.ip derives from X-Forwarded-For
-      // If you know the exact number of proxies, replace 'true' with that number (e.g., 1)
-      app.set("trust proxy", true);
+      // Trust a specific number of proxy hops (safer than boolean true).
+      // Configure via TRUST_PROXY_HOPS; default to 1 when sitting behind a single proxy/ELB.
+      const trustProxyHops = parseInt(process.env.TRUST_PROXY_HOPS || "1", 10);
+      app.set("trust proxy", trustProxyHops);
+      console.log(`Trust proxy hops: ${trustProxyHops}`);
       const auth = api.auth({ storage: storage });
       const redisManager = new RedisManager();
 
@@ -143,7 +145,8 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       const limiter = rateLimit({
         windowMs: 1000, // 1 minute
         max: 2000, // limit each IP to 100 requests per windowMs
-        validate: { xForwardedForHeader: false }
+        // With trust proxy set to a specific hop count, enable validations for safer IP detection
+        validate: { trustProxy: true, xForwardedForHeader: true }
       });
 
       if (process.env.DISABLE_ACQUISITION !== "true") {
