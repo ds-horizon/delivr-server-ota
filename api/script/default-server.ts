@@ -59,6 +59,9 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
     })
     .then(() => {
       const app = express();
+      // Trust the reverse proxy (e.g., Nginx/ALB/Cloudflare) so req.ip derives from X-Forwarded-For
+      // If you know the exact number of proxies, replace 'true' with that number (e.g., 1)
+      app.set("trust proxy", true);
       const auth = api.auth({ storage: storage });
       const redisManager = new RedisManager();
 
