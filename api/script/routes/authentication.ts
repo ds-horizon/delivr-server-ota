@@ -2,7 +2,6 @@ import { OAuth2Client, TokenPayload } from "google-auth-library";
 import * as cookieSession from "cookie-session";
 import { Request, Response, Router, RequestHandler } from "express";
 import * as storage from "../storage/storage";
-import rateLimit from "express-rate-limit";
 import { sendErrorToDatadog } from "../utils/tracer";
 
 // Replace with your actual Google Client ID (from Google Developer Console)
@@ -165,7 +164,6 @@ export class Authentication {
     // Example protected route
     router.get(
       "/authenticated",
-      rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }),
       this.authenticate.bind(this),
       (req: Request, res: Response) => {
         res.send({ authenticated: true, user: req.user });
