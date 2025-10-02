@@ -315,6 +315,34 @@ export class AzureStorage implements storage.Storage {
       })
       .catch(AzureStorage.azureErrorHandler);
   }
+// NOTE: This method is not implemented for azure storage
+  public getAppOwnershipCount(accountId: string): Promise<number> {
+    return Promise.reject(
+      storage.storageError(
+        storage.ErrorCode.Other,
+        "AzureStorage is not configured. Please use S3Storage or JsonStorage."
+      )
+    );
+  }
+
+  // NOTE: Terms acceptance methods - stubs for Azure (not implemented)
+  public getTermsAcceptance(accountId: string): Promise<storage.TermsAcceptance> {
+    return Promise.reject(
+      storage.storageError(
+        storage.ErrorCode.Other,
+        "AzureStorage is not configured. Please use S3Storage or JsonStorage."
+      )
+    );
+  }
+
+  public addOrUpdateTermsAcceptance(termsAcceptance: storage.TermsAcceptance): Promise<storage.TermsAcceptance> {
+    return Promise.reject(
+      storage.storageError(
+        storage.ErrorCode.Other,
+        "AzureStorage is not configured. Please use S3Storage or JsonStorage."
+      )
+    );
+  }
 
   public getAccountIdFromAccessKey(accessKey: string): Promise<string> {
     const partitionKey: string = Keys.getShortcutAccessKeyPartitionKey(accessKey);

@@ -44,6 +44,7 @@ export class JsonStorage implements storage.Storage {
   public packages: { [id: string]: storage.Package } = {};
   public blobs: { [id: string]: string } = {};
   public accessKeys: { [id: string]: storage.AccessKey } = {};
+  public termsAcceptance: { [accountId: string]: storage.TermsAcceptance } = {};
 
   public accountToAppsMap: { [id: string]: string[] } = {};
   public appToAccountMap: { [id: string]: string } = {};
@@ -213,6 +214,66 @@ export class JsonStorage implements storage.Storage {
       merge(this.accounts[account.id], updates);
       this.saveStateAsync();
     });
+  }
+
+  public getAppOwnershipCount(accountId: string): Promise<number> {
+    return this.getAccount(accountId).then((account: storage.Account) => {
+      const appIds = this.accountToAppsMap[accountId];
+      
+      if (!appIds) {
+        return 0;
+      }
+
+      let ownerCount = 0;
+      const userEmail = account.email.toLowerCase();
+      
+      // Count apps where user is owner
+      appIds.forEach((appId: string) => {
+        const app = this.apps[appId];
+        if (app && app.collaborators && app.collaborators[userEmail]) {
+          const permission = app.collaborators[userEmail].permission;
+          if (permission === storage.Permissions.Owner) {
+            ownerCount++;
+          }
+        }
+      });
+
+      return ownerCount;
+    });
+  }
+
+  // Terms acceptance methods
+  public getTermsAcceptance(accountId: string): Promise<storage.TermsAcceptance> {
+    const termsRecord = this.termsAcceptance[accountId];
+    if (!termsRecord) {
+      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+    }
+    return Promise.resolve(clone(termsRecord));
+  }
+
+  public addOrUpdateTermsAcceptance(termsAcceptance: storage.TermsAcceptance): Promise<storage.TermsAcceptance> {
+    const existingRecord = this.termsAcceptance[termsAcceptance.accountId];
+    
+    if (existingRecord) {
+      // Update existing record
+      existingRecord.termsVersion = termsAcceptance.termsVersion;
+      existingRecord.acceptedTime = termsAcceptance.acceptedTime;
+      this.saveStateAsync();
+      return Promise.resolve(clone(existingRecord));
+    } else {
+      // Create new record
+      const newRecord: storage.TermsAcceptance = {
+        id: termsAcceptance.id || this.newId(),
+        accountId: termsAcceptance.accountId,
+        email: termsAcceptance.email,
+        termsVersion: termsAcceptance.termsVersion,
+        acceptedTime: termsAcceptance.acceptedTime
+      };
+
+      this.termsAcceptance[termsAcceptance.accountId] = newRecord;
+      this.saveStateAsync();
+      return Promise.resolve(clone(newRecord));
+    }
   }
 
   public getAccountIdFromAccessKey(accessKey: string): Promise<string> {
