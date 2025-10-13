@@ -32,7 +32,19 @@ To emulate Azure Blob Storage locally. Azurite needs to be installed and running
 - `MICROSOFT_CLIENT_SECRET`
 - `MICROSOFT_TENANT_ID`: Required if application registration is single tenant.
 
+#### Google OAuth
+
+- `GOOGLE_CLIENT_ID`: The client ID from Google Developer Console
+
 ## Optional parameters
+
+### Authorization
+
+- `LOGIN_AUTHORIZED_DOMAINS`: Comma-separated list of additional email domains authorized to access the service via Google OAuth. 
+
+### Terms and Conditions
+
+- `CURRENT_TERMS_VERSION`: Version string for the current terms and conditions that users must accept. Example: `v1.0`, `v2.1`. Defaults to `v1.0` if not set.
 
 ### HTTPS
 - `HTTPS`: Set to 'true' to enable HTTPS for local deployment

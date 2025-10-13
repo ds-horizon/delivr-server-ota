@@ -9,6 +9,7 @@ import * as shortid from "shortid";
 import * as utils from "../utils/common";
 import * as mysql from "mysql2/promise";
 import * as fs from "fs";
+import * as security from "../utils/security";
 
 //Creating Access Key
 export function createAccessKey(sequelize: Sequelize) {
@@ -113,6 +114,25 @@ export function createCollaborators(sequelize: Sequelize) {
             }),
             allowNull:true
         },
+    })
+}
+
+//Create TermsAcceptance
+export function createTermsAcceptance(sequelize: Sequelize) {
+    return sequelize.define("termsAcceptance", {
+        id: { type: DataTypes.STRING, allowNull: false, primaryKey: true },
+        accountId: { 
+            type: DataTypes.STRING, 
+            allowNull: false, 
+            unique: true, // Prevents duplicate entries per account
+            references: {
+                model: 'accounts',
+                key: 'id',
+            }
+        },
+        email: { type: DataTypes.STRING, allowNull: false },
+        termsVersion: { type: DataTypes.STRING, allowNull: false },
+        acceptedTime: { type: DataTypes.BIGINT, allowNull: false }, // Epoch timestamp
     })
 }
 
@@ -227,6 +247,7 @@ export function createModelss(sequelize: Sequelize) {
   const AppPointer = createAppPointer(sequelize);
   const Collaborator = createCollaborators(sequelize);
   const App = createApp(sequelize);
+  const TermsAcceptance = createTermsAcceptance(sequelize);
 
   // Define associations
 
@@ -267,6 +288,7 @@ export function createModelss(sequelize: Sequelize) {
     AppPointer,
     Collaborator,
     App,
+    TermsAcceptance,
   };
 }
 
@@ -290,7 +312,8 @@ export const MODELS = {
   ACCESSKEY : "accessKey",
   ACCOUNT : "account",
   APPPOINTER: "AppPointer",
-  TENANT : "tenant"
+  TENANT : "tenant",
+  TERMS_ACCEPTANCE : "termsAcceptance"
 }
 
 const DB_NAME = "codepushdb"
@@ -305,10 +328,6 @@ export class S3Storage implements storage.Storage {
     private setupPromise: Promise<void>;
     public constructor() {
         this.s3 = new S3({
-          endpoint: process.env.S3_ENDPOINT, // LocalStack S3 endpoint
-          s3ForcePathStyle: true,
-          accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
           region: process.env.S3_REGION
         });
         shortid.characters("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-");
@@ -473,6 +492,81 @@ export class S3Storage implements storage.Storage {
           },)
         })
         .catch(S3Storage.storageErrorHandler);
+    }
+
+    public getAppOwnershipCount(accountId: string): Promise<number> {
+        return this.setupPromise
+            .then(() => {
+                // Direct query to collaborators table
+                return this.sequelize.models[MODELS.COLLABORATOR].count({
+                    where: {
+                        accountId: accountId,
+                        permission: 'Owner'
+                    }
+                });
+            })
+            .catch(S3Storage.storageErrorHandler);
+    }
+
+    // Terms acceptance methods
+    public getTermsAcceptance(accountId: string): Promise<storage.TermsAcceptance> {
+        return this.setupPromise
+            .then(() => {
+                return this.sequelize.models[MODELS.TERMS_ACCEPTANCE].findOne({
+                    where: { accountId: accountId }
+                });
+            })
+            .then((result: any) => {
+                if (!result) {
+                    throw storage.storageError(
+                        storage.ErrorCode.NotFound,
+                        `Terms acceptance record not found for account ${accountId}`
+                    );
+                }
+                return {
+                    id: result.id,
+                    accountId: result.accountId,
+                    email: result.email,
+                    termsVersion: result.termsVersion,
+                    acceptedTime: result.acceptedTime
+                };
+            })
+            .catch(S3Storage.storageErrorHandler);
+    }
+
+    public addOrUpdateTermsAcceptance(termsAcceptance: storage.TermsAcceptance): Promise<storage.TermsAcceptance> {
+        return this.setupPromise
+            .then(() => {
+                const termsData = {
+                    id: termsAcceptance.id || security.generateSecureKey(termsAcceptance.accountId),
+                    accountId: termsAcceptance.accountId,
+                    email: termsAcceptance.email,
+                    termsVersion: termsAcceptance.termsVersion,
+                    acceptedTime: termsAcceptance.acceptedTime
+                    // createdAt and updatedAt handled by Sequelize defaults
+                };
+
+                // Use upsert (INSERT ... ON DUPLICATE KEY UPDATE)
+                return this.sequelize.models[MODELS.TERMS_ACCEPTANCE].upsert(termsData, {
+                    returning: true
+                });
+            })
+            .then(() => {
+                // After upsert, fetch the record to return it
+                return this.sequelize.models[MODELS.TERMS_ACCEPTANCE].findOne({
+                    where: { accountId: termsAcceptance.accountId }
+                });
+            })
+            .then((result: any) => {
+                return {
+                    id: result.id,
+                    accountId: result.accountId,
+                    email: result.email,
+                    termsVersion: result.termsVersion,
+                    acceptedTime: result.acceptedTime
+                };
+            })
+            .catch(S3Storage.storageErrorHandler);
     }
   
     public getAccountIdFromAccessKey(accessKey: string): Promise<string> {
@@ -1209,9 +1303,13 @@ export class S3Storage implements storage.Storage {
         return this.setupPromise
         .then(async () => {
           for (const appPackage of history) {
-            // Find the existing package in the table
+            // Find the existing package in the table using unique label and packageHash for data integrity
             const existingPackage = await this.sequelize.models[MODELS.PACKAGE].findOne({
-              where: { deploymentId: deploymentId, packageHash: appPackage.packageHash },
+              where: { 
+                deploymentId: deploymentId, 
+                label: appPackage.label,
+                packageHash: appPackage.packageHash
+              },
             });
     
             if (existingPackage) {

@@ -71,6 +71,41 @@ export class Authentication {
     }
   }
 
+  // Check if the user's email domain is authorized to access the service
+  private isEmailDomainAuthorized(email: string): boolean {
+    const authorizedDomains = process.env.LOGIN_AUTHORIZED_DOMAINS;
+    
+    // Always include dream11.com as an allowed domain
+    let allowedDomains: string[] = ['dream11.com'];
+    
+    if (authorizedDomains && authorizedDomains.trim() !== '') {
+      // Parse comma-separated domains and normalize
+      const configuredDomains = authorizedDomains
+        .split(',')
+        .map(domain => domain.trim().toLowerCase())
+        .filter(domain => domain.length > 0);
+      
+      // Add configured domains to the allowed list (avoiding duplicates)
+      configuredDomains.forEach(domain => {
+        if (!allowedDomains.includes(domain)) {
+          allowedDomains.push(domain);
+        }
+      });
+    }
+    
+    // Extract and check email domain
+    if (!email) {
+      return false;
+    }
+    
+    const emailDomain = email.split('@')[1]?.toLowerCase();
+    if (!emailDomain) {
+      return false;
+    }
+    
+    return allowedDomains.includes(emailDomain);
+  }
+
   // Middleware to authenticate requests using Google ID token
   public async authenticate(req: Request, res: Response, next: (err?: Error) => void) {
     // Bypass authentication in development mode
@@ -128,6 +163,15 @@ export class Authentication {
 
         // Check user exists in the storage
         const userEmail = payload.email;
+
+        // Authorize email domain BEFORE creating user in database
+        if (!this.isEmailDomainAuthorized(userEmail)) {
+          sendErrorToDatadog(new Error(`403: Unauthorized domain access attempt - ${userEmail}`));
+          return res.status(403).send(
+            "Access denied: Your email domain is not authorized to access this service. " +
+            "Please contact your administrator if you believe this is an error."
+          );
+        }
 
         const user = await this.getOrCreateUser(payload);
 
