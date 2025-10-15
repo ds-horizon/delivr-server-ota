@@ -1292,7 +1292,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
             rollout: info.rollout || null,
             size: sourcePackage.size,
             uploadTime: new Date().getTime(),
-            isBundlePatchEnabled: sourcePackage.isBundlePatchEnabled,
+            isBundlePatchingEnabled: sourcePackage.isBundlePatchingEnabled,
             releaseMethod: storageTypes.ReleaseMethod.Promote,
             originalLabel: sourcePackage.label,
             originalDeployment: sourceDeploymentName,
@@ -1394,7 +1394,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
             packageHash: destinationPackage.packageHash,
             size: destinationPackage.size,
             uploadTime: new Date().getTime(),
-            isBundlePatchEnabled: destinationPackage.isBundlePatchEnabled,
+            isBundlePatchingEnabled: destinationPackage.isBundlePatchingEnabled,
             releaseMethod: storageTypes.ReleaseMethod.Rollback,
             originalLabel: destinationPackage.label,
           };
