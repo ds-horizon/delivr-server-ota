@@ -3,7 +3,7 @@ import { createModelss } from "./aws-storage";
 
 // Define the Sequelize connection
 const sequelize = new Sequelize("codepushdb", "root", "root", {
-  host: "localhost",
+  host: process.env.DB_HOST || "db",
   dialect: "mysql",
 });
 

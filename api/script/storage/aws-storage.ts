@@ -317,6 +317,9 @@ export class S3Storage implements storage.Storage {
         this.setupPromise = this.createDatabaseIfNotExists().then(() => {
           this.sequelize = new Sequelize({
             database: process.env.DB_NAME || DB_NAME,
+            username: process.env.DB_USER || DB_USER,
+            password: process.env.DB_PASS || DB_PASS,
+            host: process.env.DB_HOST || DB_HOST,
             dialect: 'mysql',
             replication: {
                 write: {
