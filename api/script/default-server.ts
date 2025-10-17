@@ -175,4 +175,8 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
 
       done(null, app, storage);
     })
+    .catch((error) => {
+      console.error("Error starting server:", error);
+      done(error);
+    });
 }
