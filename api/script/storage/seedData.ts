@@ -167,5 +167,8 @@ async function seed() {
   }
 }
 
-// Run the seed function
-seed();
+if (process.env.NODE_ENV !== "production") {
+  seed();
+} else {
+  // Do nothing
+}

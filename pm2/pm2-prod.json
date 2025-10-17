@@ -8,7 +8,7 @@
         "merge_logs": true,
         "exec_mode": "cluster",
         "log_date_format": "DD-MM-YYYY HH:mm Z",
-        "cwd": "/var/www/code-push-server/api",
+        "cwd": "../api",
         "env": {
           "NODE_ENV": "prod"
         }
