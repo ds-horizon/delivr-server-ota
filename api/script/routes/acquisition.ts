@@ -128,22 +128,20 @@ export function getHealthRouter(config: AcquisitionConfig): express.Router {
   const router: express.Router = express.Router();
 
   router.get("/healthcheck", (req: express.Request, res: express.Response, next: (err?: any) => void): any => {
-      const healthChecks: Promise<any>[] = [
-        // Storage is always required
-        storage.checkHealth()
-      ];
-
-      // Redis health check with timeout
-      healthChecks.push(
+      // Either Storage OR Redis must be healthy (at least one)
+      const storageOrRedis = Promise.any([
+        storage.checkHealth(),
         Promise.race([
           redisManager.checkHealth(),
           new Promise((_, reject) =>
             setTimeout(() => reject(new Error("Redis timeout after 30ms")), 30)
           )
         ])
-      );
+      ]);
 
-      // Memcached health check with timeout (if memcachedManager exists)
+      const healthChecks: Promise<any>[] = [storageOrRedis];
+
+      // Memcached health check with timeout (REQUIRED if memcachedManager exists)
       if (memcachedManager) {
         healthChecks.push(
           Promise.race([
@@ -155,7 +153,7 @@ export function getHealthRouter(config: AcquisitionConfig): express.Router {
         );
       }
 
-      // All components must be healthy
+      // Storage/Redis (at least one) AND Memcached (if configured) must be healthy
       Promise.all(healthChecks)
         .then(() => res.status(200).send("Healthy"))
         .catch((error: Error) => {
