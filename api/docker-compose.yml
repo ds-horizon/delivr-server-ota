@@ -39,7 +39,16 @@ services:
       - db
       - localstack
     working_dir: /app/api
-    command: ["/bin/sh", "-c", "sleep 5 && npx ts-node script/storage/seedData.ts && npm run build && pm2-runtime start /app/pm2/pm2-dev.json"]
-
+    command: >
+            /bin/sh -c "
+              sleep 5 && 
+              npx ts-node script/storage/seedData.ts && 
+              npm run build && 
+              if [ \"$NODE_ENV\" = \"production\" ]; then 
+                pm2-runtime start /app/pm2/pm2-prod.json --watch; 
+              else 
+                pm2-runtime start /app/pm2/pm2-dev.json --watch; 
+              fi
+            "
 volumes:
   db_data:
