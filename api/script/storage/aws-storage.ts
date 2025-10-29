@@ -561,7 +561,7 @@ export class S3Storage implements storage.Storage {
               // });
               const isAdmin = tenant.dataValues.createdBy === accountId;
               if (!isAdmin) {
-                throw new Error("User does not have admin permissions for the specified tenant.");
+                throw storage.storageError(storage.ErrorCode.Invalid, "User does not have admin permissions for the specified tenant.");
               }
             }
           } else if(tenantName) {
@@ -1234,7 +1234,7 @@ export class S3Storage implements storage.Storage {
 
     public updatePackageHistory(accountId: string, appId: string, deploymentId: string, history: storage.Package[]): Promise<void> {
         if (!history || !history.length) {
-          throw new Error("Cannot clear package history from an update operation");
+          throw storage.storageError(storage.ErrorCode.Invalid, "Cannot clear package history from an update operation");
         }
     
         return this.setupPromise

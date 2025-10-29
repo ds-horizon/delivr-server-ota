@@ -167,6 +167,7 @@ export class Authentication {
         // Authorize email domain BEFORE creating user in database
         if (!this.isEmailDomainAuthorized(userEmail)) {
           sendErrorToDatadog(new Error(`403: Unauthorized domain access attempt - ${userEmail}`));
+          console.log("Access denied: Your email domain is not authorized to access this service. Please contact your administrator if you believe this is an error.");
           return res.status(403).send(
             "Access denied: Your email domain is not authorized to access this service. " +
             "Please contact your administrator if you believe this is an error."
