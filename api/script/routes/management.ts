@@ -574,7 +574,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
           const collaboratorAccountId = collaboratorBeingModified.accountId;
           const appCreatorAccountId = (app as any).accountId;
           if (collaboratorAccountId === appCreatorAccountId && role === "Collaborator") {
-            throw errorUtils.restError(errorUtils.ErrorCode.Conflict,"The app creator cannot change their permission from Owner to Collaborator.");
+            throw errorUtils.restError(errorUtils.ErrorCode.Conflict,"The app creator permission can not be changed from Owner to Collaborator.");
           }
         }
         
