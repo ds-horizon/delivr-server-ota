@@ -1,37 +1,108 @@
-# Visual Studio App Center CodePush Standalone Version
+# DOTA - Over-the-Air Updates for React Native Apps
 
-[CodePush](https://learn.microsoft.com/en-us/appcenter/distribution/codepush/) is an App Center feature that enables React Native developers to deploy mobile app updates directly to their users’ devices. It consists of two parts: CodePush Server where developers can publish app updates to (e.g. JS, HTML, CSS or image changes), and [CodePush React Native Client SDK](https://github.com/Microsoft/react-native-code-push) that enables querying for updates from within an app.
+### Why DOTA?
+- 🚀 Instantly push updates—no app store or distribution delays.
+- 🏗️ Full control: run locally or on any supported cloud.
+- 🔌 Flexible and extensible: mix, match, and extend with plugins.
+- 🧑‍🤝‍🧑 **Cohorting**: Target updates by deployment key, app version, tenant, or RBAC.
+- ⚡ **Force Update**: Instantly require users to update by enabling mandatory updates.
+- 🗂️ **Version Control**: Multi-version, partitioned, and semantic versioning support.
 
-We announced that Visual Studio App Center will be retired on March 31, 2025. You can learn more about the support timeline and alternatives on https://aka.ms/appcenter/retire. In order to let developers keep using CodePush functionality after App Center is fully retired, we created a standalone version of CodePush Server that can be deployed and used independently from App Center itself. Code of this standalone version can be found in this repository. It is fully compatible with [CodePush React Native Client SDK](https://github.com/Microsoft/react-native-code-push).
+## ✨ Features
 
+- 🔄 **OTA Updates** for React Native apps
+- 🏗️ **Self-hostable**: Run locally, on-prem, or in your cloud
+- 🔌 **Pluggable Provider System**: Multi-platform cloud plugin provider
+- 🐳 **Docker-First**: Emulated environments with LocalStack, MySQL, and more
+- 🛡️ **Secure Auth**: Google OAuth or passwordless authentication mode for local/dev
+- 📊 **Metrics & Monitoring**: Optional Redis integration for advanced analytics
+- 🛠️ **CLI, Web Dashboard, and API**: Full toolchain for devs and ops
 
-## Getting Started
+---
 
-### CodePush Server
+## 🔗 Quick Links
 
-The CodePush server, located in the `api` subdirectory, allows developers to build, deploy and manage CodePush updates themselves.
-For detailed information about the CodePush server, including installation instructions and usage details, please refer to the [CodePush Server README](./api/README.md).
+- [Delivr Web Panel](https://github.com/ds-horizon/delivr-web-panel)
+- [Delivr OTA SDK](https://github.com/ds-horizon/delivr-sdk-ota)
+- [Delivr OTA CLI](https://github.com/ds-horizon/delivr-cli)
+- [Quickstart Guide](https://dota.dreamsportslabs.com/documentation/quickstart)
+- [Deployment Techniques](https://dota.dreamsportslabs.com/documentation/deployment/local)
+- [Report an Issue](https://github.com/ds-horizon/delivr-server-ota/issues)
 
+---
 
-### CodePush CLI
+## 📦 Installation and development setup
 
-The CodePush CLI, located in `cli` subdirectory, is a command-line tool that allows developers to interact with the CodePush server. For detailed information about the CodePush CLI, including installation instructions and usage details, please refer to the [CodePush CLI README](./cli/README.md).
+- Refer to [this doc](docs/DEV_SETUP.md) for installation and development setup.
 
+---
 
-## Contributing
+## 🚀 Deployment Techniques & Provider Integration
 
-While we cannot accept contributions or issues in this repository; however, as a permissively licensed open-source project, it is ready for community development and forks independently.
+DOTA supports a flexible, plugin-based provider system. You can deploy and scale your update server in any environment:
 
+You can change provider settings (e.g., use real AWS, Azure, or GCP secrets) by editing `.env.dev.web`. For details, see the [Environment Configuration Guide](https://dota.dreamsportslabs.com/documentation/configuration/environment).
 
-## Support
+| Mode      | Storage/DB Plugins           | Cloud Provider | Analytics Plugins | Notes                        |
+|-----------|------------------------------|---------------|------------------|------------------------------|
+| **Local** | JSON, LocalStack (S3, EC2), MySQL, Postgres, Redis, Azurite | Emulated           | Redis      | All-in-Docker; emulate AWS/Azure; switch DB dialect |
+| **AWS**   | S3, EC2, RDS (MySQL/Postgres)| AWS           | OSS Cache      | Use real AWS credentials     |
+| **Azure** | Blob Storage, App Service, Azurite, Azure Data Tables | Azure | Azure Redis | Use real Azure credentials |
 
-This code is provided “as is”, because of that Microsoft will not provide support services for it.
+- **Switch providers** by editing your `.env` and running the setup script.
+- **Mix and match** storage, database, and analytics plugins as needed.
 
+See the [Deployment Documentation](https://dota.dreamsportslabs.com/documentation/deployment/local) for detailed guides and configuration examples.
 
-## Legal Notice
+## 🔌 Plugin System & Extensibility
 
-Microsoft grants you access to the code in this repository under the MIT License, see the [LICENSE](./LICENSE) to learn more.
+DOTA's plugin system lets you extend or replace core features:
+- **Storage Plugins**: S3, Azure Blob, local, or custom.
+- **Database Plugins**: MySQL, Postgres, or custom (via Sequelize dialects).
+- **Auth Plugins**: Google OAuth, passwordless authentication, configurable OAuth Plugin(future, e.g [Guardian](https://guardian.dream11.com/) support).
+- **Metrics Plugins**: Redis, OSS Cache, Azure Cache with Cluster Mode.
+- **Cohorting Plugins**: Rule-based targeting by attributes (deployment key, app version/range, environment, user cohort, platform, app, tenant, etc.)—fully configurable via plugins.
+- **RBAC Plugins**: Inbuilt, configurable (future, e.g. [Casbin](https://github.com/casbin/casbin) support).
 
-Microsoft, Windows, Microsoft Azure and/or other Microsoft products and services referenced in the documentation may be either trademarks or registered trademarks of Microsoft in the United States and/or other countries. The license for this code does not grant you rights to use any Microsoft names, logos, or trademarks. Go to [Microsoft Trademark and Brand Guidelines](http://go.microsoft.com/fwlink/?LinkID=254653) for more information.
+> **Impact:** Adapt DOTA to any workflow, compliance need, or infrastructure—just like hot-updater's build, storage, and database plugins.
 
-Privacy information can be found at https://privacy.microsoft.com/.
+Want to spawn your toolchain on custom plugin? See the [Plugin Guide](https://dota.dreamsportslabs.com/documentation/plugins).
+
+---
+
+## 📖 API Documentation
+
+- [API Collection](docs/openapi.yaml)
+- [API Reference](https://dota.dreamsportslabs.com/documentation/api)
+- [CLI Usage Guide](https://dota.dreamsportslabs.com/documentation/cli/commands)
+- [Web Dashboard](https://dota.dreamsportslabs.com/documentation/web/dashboard)
+
+---
+
+## ⚙️ TechStack Used:
+
+- [Node.js](https://nodejs.org/)
+- [TypeScript](https://www.typescriptlang.org/)
+- [React](https://react.dev/)
+- [Docker](https://www.docker.com/)
+- [Remix](https://remix.run/)
+- [Redis](https://redis.io/)
+- [Sequelize](https://sequelize.org/)
+
+---
+
+## 🚀 Contribute to DOTA
+
+DOTA is an open-source project and welcomes contributions from the community. For details on how to contribute, please see our [guide to contributing](CONTRIBUTING.md).
+
+---
+
+## ⚖️ License
+
+This code is provided under the MIT License, see the [LICENSE](LICENSE.txt) to learn more.
+
+---
+
+## ✉️ Contact
+
+If you need feedback or support, reach out via the [Issue Tracker](https://github.com/ds-horizon/delivr-server-ota/issues).
