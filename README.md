@@ -25,9 +25,8 @@
 - [Delivr Web Panel](https://github.com/ds-horizon/delivr-web-panel)
 - [Delivr OTA SDK](https://github.com/ds-horizon/delivr-sdk-ota)
 - [Delivr OTA CLI](https://github.com/ds-horizon/delivr-cli)
-- [Quickstart Guide](https://dota.dreamsportslabs.com/documentation/quickstart)
-- [Deployment Techniques](https://dota.dreamsportslabs.com/documentation/deployment/local)
 - [Report an Issue](https://github.com/ds-horizon/delivr-server-ota/issues)
+- [API Collection](docs/openapi.yaml)
 
 ---
 
@@ -41,8 +40,6 @@
 
 DOTA supports a flexible, plugin-based provider system. You can deploy and scale your update server in any environment:
 
-You can change provider settings (e.g., use real AWS, Azure, or GCP secrets) by editing `.env.dev.web`. For details, see the [Environment Configuration Guide](https://dota.dreamsportslabs.com/documentation/configuration/environment).
-
 | Mode      | Storage/DB Plugins           | Cloud Provider | Analytics Plugins | Notes                        |
 |-----------|------------------------------|---------------|------------------|------------------------------|
 | **Local** | JSON, LocalStack (S3, EC2), MySQL, Postgres, Redis, Azurite | Emulated           | Redis      | All-in-Docker; emulate AWS/Azure; switch DB dialect |
@@ -51,8 +48,6 @@ You can change provider settings (e.g., use real AWS, Azure, or GCP secrets) by 
 
 - **Switch providers** by editing your `.env` and running the setup script.
 - **Mix and match** storage, database, and analytics plugins as needed.
-
-See the [Deployment Documentation](https://dota.dreamsportslabs.com/documentation/deployment/local) for detailed guides and configuration examples.
 
 ## 🔌 Plugin System & Extensibility
 
@@ -65,17 +60,6 @@ DOTA's plugin system lets you extend or replace core features:
 - **RBAC Plugins**: Inbuilt, configurable (future, e.g. [Casbin](https://github.com/casbin/casbin) support).
 
 > **Impact:** Adapt DOTA to any workflow, compliance need, or infrastructure—just like hot-updater's build, storage, and database plugins.
-
-Want to spawn your toolchain on custom plugin? See the [Plugin Guide](https://dota.dreamsportslabs.com/documentation/plugins).
-
----
-
-## 📖 API Documentation
-
-- [API Collection](docs/openapi.yaml)
-- [API Reference](https://dota.dreamsportslabs.com/documentation/api)
-- [CLI Usage Guide](https://dota.dreamsportslabs.com/documentation/cli/commands)
-- [Web Dashboard](https://dota.dreamsportslabs.com/documentation/web/dashboard)
 
 ---
 
