@@ -1,0 +1,22 @@
+version: '3.8'
+services:
+  mockserver:
+    image: mockserver/mockserver:latest
+    restart: always
+    ports:
+      - "1080:1080"
+    volumes:
+      - ./expectations:/config/expectations
+    environment:
+      MOCKSERVER_INITIALIZATION_JSON_PATH: /config/expectations/account.json
+    depends_on:
+      - mock-callback
+
+  mock-callback:
+    build: ./mock-callback
+    container_name: mock-callback
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+    restart: always
