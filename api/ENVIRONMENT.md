@@ -1,5 +1,4 @@
 # Environment
-
 The Delivr OTA Server is configured using environment variables.
 
 For convenience, we will also load the server environment from any '.env' file in the api directory, and the test environment from any '.test.env' file in the root directory. Use the `.env.example` file as a template for setting up your environment variables.
@@ -7,6 +6,14 @@ For convenience, we will also load the server environment from any '.env' file i
 ## Mandatory parameters
 
 ### Storage
+
+#### Storage Provider Selection
+
+- `STORAGE_TYPE`: Specifies which storage provider to use. Supported values:
+  - `aws` or `s3`: Use Amazon S3 for blob storage with MySQL database
+  - `gcp` or `gcs`: Use Google Cloud Storage for blob storage with MySQL database  
+  - `json` or `file`: Use local file-based storage (development only)
+  - Defaults to `aws` if not specified
 
 #### Local
 
@@ -16,13 +23,6 @@ To emulate Azure Blob Storage locally. Azurite needs to be installed and running
 #### Azure
 - `AZURE_STORAGE_ACCOUNT`: The name of your hosted Azure storage instance
 - `AZURE_STORAGE_ACCESS_KEY`: The key to your Azure storage instance (if KeyVault credentials are not provided)
-
-#### AWS S3
-- `AWS_ACCESS_KEY_ID`: AWS access key ID for S3 authentication. For local development with LocalStack, use 'localstack'. For production, use your actual AWS access key ID from IAM.
-- `AWS_SECRET_ACCESS_KEY`: AWS secret access key for S3 authentication. For local development with LocalStack, use 'localstack'. For production, use your actual AWS secret access key from IAM.
-- `S3_ENDPOINT`: S3 service endpoint URL. For LocalStack development use 'http://localstack:4566'. For production AWS, leave empty to use default regional endpoints or specify a custom endpoint.
-- `S3_BUCKETNAME`: Name of the S3 bucket to store Delivr OTA packages and metadata. Must be globally unique across all AWS accounts. Example: 'my-company-delivr-ota-bucket'
-- `S3_REGION`: AWS region where the S3 bucket is located. Required for production AWS usage (e.g., 'us-east-1', 'eu-west-1', 'ap-south-1'). Can be left empty for LocalStack development.
 
 ### Authentication 
 

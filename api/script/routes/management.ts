@@ -177,7 +177,6 @@ export function getManagementRouter(config: ManagementConfig): Router {
   });
 
 
-
   router.patch("/accessKeys/:accessKeyName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const accessKeyName: string = req.params.accessKeyName;

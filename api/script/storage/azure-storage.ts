@@ -315,7 +315,6 @@ export class AzureStorage implements storage.Storage {
       })
       .catch(AzureStorage.azureErrorHandler);
   }
-
 // NOTE: This method is not implemented for azure storage
   public getAppOwnershipCount(accountId: string): Promise<number> {
     return Promise.reject(
