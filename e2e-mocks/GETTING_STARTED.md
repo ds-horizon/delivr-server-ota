@@ -154,7 +154,7 @@ curl -X DELETE "http://localhost:1080/apps/MyApp/deployments/Production" \
 curl -X GET "http://localhost:1080/apps/MyApp/deployments/Production/history" \
   -H "Authorization: Bearer ${USER_ID}" | jq .
 
-# Create a release
+# Create a release (JSON only - backward compatible)
 curl -X POST "http://localhost:1080/apps/MyApp/deployments/Production/release" \
   -H "Authorization: Bearer ${USER_ID}" \
   -H "Content-Type: application/json" \
@@ -166,6 +166,21 @@ curl -X POST "http://localhost:1080/apps/MyApp/deployments/Production/release" \
       "rollout": 100
     }
   }' | jq .
+
+# Create a release with file upload (multipart/form-data)
+curl -X POST "http://localhost:1080/apps/MyApp/deployments/Production/release" \
+  -H "Authorization: Bearer ${USER_ID}" \
+  -F "package=@path/to/your/package.zip" \
+  -F "appVersion=1.0.0" \
+  -F "description=Initial release with file" \
+  -F "isMandatory=false" \
+  -F "rollout=100" | jq .
+
+# Or upload file with packageInfo as JSON field
+curl -X POST "http://localhost:1080/apps/MyApp/deployments/Production/release" \
+  -H "Authorization: Bearer ${USER_ID}" \
+  -F "package=@path/to/your/package.zip" \
+  -F 'packageInfo={"appVersion":"1.0.0","description":"Initial release","isMandatory":false,"rollout":100}' | jq .
 
 # Update release properties
 curl -X PATCH "http://localhost:1080/apps/MyApp/deployments/Production/release" \
@@ -273,11 +288,23 @@ curl -X GET "http://localhost:1080/authenticated" \
 # Then check for updates
 curl -X GET "http://localhost:1080/updateCheck?deploymentKey=YOUR_DEPLOYMENT_KEY&appVersion=1.0.0" | jq .
 
-# Example with older version (should return update)
+# Example with older version (should return update with downloadURL)
 curl -X GET "http://localhost:1080/updateCheck?deploymentKey=YOUR_DEPLOYMENT_KEY&appVersion=0.9.0" | jq .
+
+# Download the package file (if update is available)
+# The downloadURL from updateCheck points to the actual file
+curl -X GET "http://localhost:1080/packages/FILENAME.zip" -o downloaded-package.zip
 
 # New API format
 curl -X GET "http://localhost:1080/v0.1/public/codepush/update_check?deployment_key=YOUR_DEPLOYMENT_KEY&app_version=1.0.0" | jq .
+```
+
+### 10. File Download Endpoint (Public - No Auth)
+
+```bash
+# Download a package file by filename
+# The filename is available in the blobUrl from updateCheck or release history
+curl -X GET "http://localhost:1080/packages/1234567890-abc123def.zip" -o package.zip
 ```
 
 ## Complete Example Workflow
@@ -308,7 +335,15 @@ DEPLOY_KEY=$(curl -s -X POST "http://localhost:1080/apps/${APP_NAME}/deployments
   -d '{"name": "Production"}' | jq -r '.deployment.key')
 echo "Deployment key: ${DEPLOY_KEY}"
 
-# 5. Release package
+# 5. Release package (with file upload)
+curl -X POST "http://localhost:1080/apps/${APP_NAME}/deployments/Production/release" \
+  -H "Authorization: Bearer ${USER_ID}" \
+  -F "package=@./your-package.zip" \
+  -F "appVersion=1.0.0" \
+  -F "description=First release" \
+  -F "rollout=100" | jq .
+
+# Or release without file (backward compatible)
 curl -X POST "http://localhost:1080/apps/${APP_NAME}/deployments/Production/release" \
   -H "Authorization: Bearer ${USER_ID}" \
   -H "Content-Type: application/json" \
@@ -320,7 +355,15 @@ curl -X POST "http://localhost:1080/apps/${APP_NAME}/deployments/Production/rele
   }' | jq .
 
 # 6. Check for updates
-curl -X GET "http://localhost:1080/updateCheck?deploymentKey=${DEPLOY_KEY}&appVersion=0.9.0" | jq .
+UPDATE_RESPONSE=$(curl -s -X GET "http://localhost:1080/updateCheck?deploymentKey=${DEPLOY_KEY}&appVersion=0.9.0")
+echo "$UPDATE_RESPONSE" | jq .
+
+# Extract downloadURL if update is available
+DOWNLOAD_URL=$(echo "$UPDATE_RESPONSE" | jq -r '.updateInfo.downloadURL // empty')
+if [ -n "$DOWNLOAD_URL" ]; then
+  echo "Downloading update from: $DOWNLOAD_URL"
+  curl -X GET "$DOWNLOAD_URL" -o downloaded-update.zip
+fi
 ```
 
 ## Troubleshooting
@@ -441,11 +484,104 @@ This is useful when:
 
 **Note:** Expectations are stored separately from mock data, so they typically don't need to be re-registered unless you've cleared MockServer's state entirely.
 
+## File Upload and Storage
+
+The mock server now supports actual file uploads:
+
+- **File Storage**: Uploaded files are stored in `/tmp/codepush-packages` inside the container
+- **File Upload**: POST release endpoint accepts multipart/form-data with a file field named `package`
+- **File Download**: Files can be downloaded via `/packages/{filename}` endpoint
+- **Hash Computation**: When files are uploaded, actual SHA256 hash and file size are computed
+- **Backward Compatible**: JSON-only releases (without files) still work for backward compatibility
+
+### File Upload Examples
+
+```bash
+# Upload a zip file with release metadata
+curl -X POST "http://localhost:1080/apps/MyApp/deployments/Production/release" \
+  -H "Authorization: Bearer ${USER_ID}" \
+  -F "package=@./my-update.zip" \
+  -F "appVersion=1.0.0" \
+  -F "description=Bug fixes" \
+  -F "isMandatory=false" \
+  -F "rollout=100"
+
+# The response includes a blobUrl pointing to the uploaded file
+# Example: "blobUrl": "http://localhost:1080/packages/1234567890-abc123def.zip"
+```
+
+### File Size Limit
+
+The mock server has a **10GB default limit** (effectively unlimited for most use cases). If you need truly unlimited uploads or want to set a specific limit:
+
+**Default Behavior:**
+- Default limit: **10GB (10240 MB)** - large enough for almost all practical purposes
+- No configuration needed unless you want unlimited or a different limit
+
+**Setting Unlimited Uploads:**
+
+To allow truly unlimited file uploads (practical maximum of 1TB), set the limit to `0`:
+
+```yaml
+# In docker-compose.yml
+mock-callback:
+  environment:
+    PORT: 3001
+    UPLOAD_SIZE_LIMIT_MB: 0  # Unlimited (1TB practical maximum)
+```
+
+**Setting a Specific Limit:**
+
+To set a custom limit (e.g., 500MB), set the environment variable:
+
+```yaml
+mock-callback:
+  environment:
+    PORT: 3001
+    UPLOAD_SIZE_LIMIT_MB: 500  # 500MB limit
+```
+
+**After changing the limit, restart the services:**
+```bash
+docker-compose down
+docker-compose up -d
+```
+
+**Error Response:**
+
+If a file exceeds the limit, you'll receive:
+
+```bash
+# Response (413 Payload Too Large):
+# {
+#   "error": "The uploaded file is larger than the size limit of 10GB (10240MB)."
+# }
+```
+
+### File Download
+
+When checking for updates, if an update is available, the `downloadURL` field will point to the actual file:
+
+```bash
+# Check for updates
+UPDATE=$(curl -s "http://localhost:1080/updateCheck?deploymentKey=KEY&appVersion=0.9.0")
+
+# Download the update package
+DOWNLOAD_URL=$(echo "$UPDATE" | jq -r '.updateInfo.downloadURL')
+curl -O "$DOWNLOAD_URL"
+```
+
 ## Notes
 
 - **User IDs**: Use any string as a user ID in the Authorization header (e.g., `Bearer my-user-id`)
 - **No Real Authentication**: This is a mock, so any valid format user ID will work
 - **In-Memory Storage**: All data is stored in memory and will be lost when the service restarts
+- **File Storage**: Uploaded files persist in `/tmp/codepush-packages` until container is removed
 - **Mock Data**: Initial test data can be found in `mock-callback/mock_data.js`
 - **Clearing Data**: Restart `mock-callback` service to clear all in-memory data and start fresh
+- **File Limits**: Maximum file upload size is **10GB by default** (effectively unlimited for most use cases)
+  - Default limit: 10GB (10240 MB) - large enough for most practical purposes
+  - If you upload a file larger than the limit, you'll receive a `413 Payload Too Large` error
+  - To set unlimited (1TB practical max): Set `UPLOAD_SIZE_LIMIT_MB: 0` in `docker-compose.yml`
+  - To set a specific limit: Set `UPLOAD_SIZE_LIMIT_MB` to your desired value in MB
 

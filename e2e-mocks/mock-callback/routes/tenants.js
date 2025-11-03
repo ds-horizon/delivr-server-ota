@@ -1,11 +1,7 @@
 const db = require('../mock_data');
 const { json, html, fieldErr, sendError } = require('../utils/response');
 
-// Helper: Extract user ID from Authorization header
-function getUserId(req) {
-  const auth = req.headers.authorization || '';
-  return auth.replace('Bearer ', '') || null;
-}
+const { getUserId } = require('../utils/auth');
 
 // GET /tenants - Get all tenants/organizations for account
 function getTenants(req, res) {

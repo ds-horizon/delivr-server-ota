@@ -622,6 +622,104 @@ module.exports = {
     appIdCounter = 1;
     deploymentIdCounter = 1;
     deploymentKeyCounter = 1;
+  },
+
+  /**
+   * Initialize pre-configured test data
+   * Creates default account, tenant, app, and deployment for testing
+   * This data is automatically created when the server starts
+   */
+  initializePreconfiguredData: () => {
+    // Reset any existing data first
+    module.exports.reset();
+
+    // 1. Create test account
+    const testAccountId = 'test-user';
+    const testAccount = {
+      id: testAccountId,
+      name: 'Test User',
+      email: 'test@example.com',
+      linkedProviders: []
+    };
+    accounts.push(testAccount);
+
+    // 2. Create test tenant/organization
+    // Note: displayName must match what CLI uses (testOrg/testApp format)
+    const testTenantId = 'testOrg';
+    const testTenant = {
+      id: testTenantId,
+      displayName: 'testOrg', // Must match CLI app name format
+      createdBy: testAccountId,
+      createdAt: Date.now()
+    };
+    tenants.push(testTenant);
+
+    // 3. Create test app
+    const testAppName = 'testApp';
+    const testApp = {
+      id: generateId('app'),
+      name: testAppName,
+      accountId: testAccountId,
+      tenantId: testTenantId,
+      createdTime: Date.now()
+    };
+    apps.push(testApp);
+
+    // 4. Create Production deployment with the expected key
+    const productionDeployment = {
+      id: generateId('deployment'),
+      name: 'Production',
+      key: 'deployment-key-1',
+      appId: testApp.id,
+      createdTime: Date.now(),
+      packageHistory: [],
+      package: null
+    };
+    deployments.push(productionDeployment);
+
+    // 5. Create Staging deployment (optional, but useful for testing)
+    const stagingDeployment = {
+      id: generateId('deployment'),
+      name: 'Staging',
+      key: 'deployment-key-2',
+      appId: testApp.id,
+      createdTime: Date.now(),
+      packageHistory: [],
+      package: null
+    };
+    deployments.push(stagingDeployment);
+
+    // 6. Add test-user as owner collaborator for the app
+    collaborators.push({
+      email: testAccount.email,
+      accountId: testAccountId,
+      appId: testApp.id,
+      permission: 'Owner'
+    });
+
+    // 7. Create access key for CLI authentication (named "test-user")
+    // CLI sends "Bearer cli-test-user", so we need an access key with friendlyName "test-user"
+    const accessKeyExpiry = Date.now() + (90 * 24 * 60 * 60 * 1000); // 90 days from now
+    const testAccessKey = {
+      id: generateId('accesskey'),
+      name: `cli-${testAccountId}`, // CLI uses this as the actual key
+      friendlyName: testAccountId, // This is what CLI references
+      accountId: testAccountId,
+      expires: accessKeyExpiry,
+      createdTime: Date.now(),
+      isSession: false,
+      createdBy: testAccountId,
+      scope: null
+    };
+    accessKeys.push(testAccessKey);
+
+    // console.log('✅ Pre-configured test data initialized:');
+    // console.log(`   - Account: ${testAccountId} (${testAccount.email})`);
+    // console.log(`   - Tenant: ${testTenantId}`);
+    // console.log(`   - App: ${testAppName} (id: ${testApp.id})`);
+    // console.log(`   - Production Deployment Key: ${productionDeployment.key}`);
+    // console.log(`   - Staging Deployment Key: ${stagingDeployment.key}`);
+    // console.log(`   - CLI Access Key: ${testAccessKey.friendlyName} (Bearer cli-${testAccessKey.friendlyName})`);
   }
 };
 

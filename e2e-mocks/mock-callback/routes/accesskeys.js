@@ -1,10 +1,5 @@
 const db = require('../mock_data');
-
-// Helper: Extract user ID from Authorization header
-function getUserId(req) {
-  const auth = req.headers.authorization || '';
-  return auth.replace('Bearer ', '') || null;
-}
+const { getUserId } = require('../utils/auth');
 
 // Helper: Extract IP address from request
 function getIpAddress(req) {

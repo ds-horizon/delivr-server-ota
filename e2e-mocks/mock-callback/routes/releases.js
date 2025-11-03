@@ -1,11 +1,7 @@
 const db = require('../mock_data');
 const deploymentsRoutes = require('./deployments');
-
-// Helper: Extract user ID from Authorization header
-function getUserId(req) {
-  const auth = req.headers.authorization || '';
-  return auth.replace('Bearer ', '') || null;
-}
+const fileStorage = require('../utils/file-storage');
+const { getUserId } = require('../utils/auth');
 
 // Helper: Extract tenant ID from header
 function getTenantId(req) {
@@ -94,9 +90,18 @@ function getHistory(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const appName = req.params.appName;
+  let appName = req.params.appName;
   const deploymentName = req.params.deploymentName;
-  const tenantId = getTenantId(req);
+  let tenantId = getTenantId(req);
+  
+  // Parse appName if it contains tenant/appName format (e.g., "testOrg/testApp")
+  if (appName.includes('/')) {
+    const parts = appName.split('/');
+    if (parts.length === 2 && !tenantId) {
+      tenantId = parts[0];
+      appName = parts[1];
+    }
+  }
 
   // Check if app exists
   const appExists = db.appExists(appName, tenantId);
@@ -126,19 +131,70 @@ function getHistory(req, res) {
 }
 
 // POST /apps/:appName/deployments/:deploymentName/release - Create a new release
-function postRelease(req, res) {
+async function postRelease(req, res) {
   const accountId = getUserId(req);
   if (!accountId) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const appName = req.params.appName;
+  let appName = req.params.appName;
   const deploymentName = req.params.deploymentName;
-  const tenantId = getTenantId(req);
+  let tenantId = getTenantId(req);
   
-  // For mock, accept packageInfo in body (simplified - no file upload)
-  // In real API, this would handle multipart file upload
-  const packageInfo = req.body.packageInfo || req.body || {};
+  // Parse appName if it contains tenant/appName format (e.g., "testOrg/testApp")
+  if (appName.includes('/')) {
+    const parts = appName.split('/');
+    if (parts.length === 2 && !tenantId) {
+      tenantId = parts[0];
+      appName = parts[1];
+    }
+  }
+  
+  // Handle both multipart file upload and JSON-only requests
+  let packageInfo = {};
+  let uploadedFile = null;
+  let fileMetadata = null;
+  
+  // Check if file was uploaded (multipart/form-data)
+  if (req.file) {
+    uploadedFile = req.file;
+    
+    // Parse packageInfo from form field (if provided)
+    try {
+      // First try to parse as JSON string (packageInfo field)
+      if (req.body.packageInfo) {
+        packageInfo = typeof req.body.packageInfo === 'string' 
+          ? JSON.parse(req.body.packageInfo) 
+          : req.body.packageInfo;
+      } 
+      // Otherwise, check for flat form fields
+      else {
+        // Support flat form fields - check if any package info fields are present
+        if (req.body.appVersion || req.body.description || req.body.isMandatory !== undefined || req.body.isDisabled !== undefined || req.body.rollout !== undefined) {
+          packageInfo = {
+            appVersion: req.body.appVersion || undefined,
+            description: req.body.description || undefined,
+            isMandatory: req.body.isMandatory === 'true' || req.body.isMandatory === true || req.body.isMandatory === 'false' ? (req.body.isMandatory === 'true' || req.body.isMandatory === true) : undefined,
+            isDisabled: req.body.isDisabled === 'true' || req.body.isDisabled === true || req.body.isDisabled === 'false' ? (req.body.isDisabled === 'true' || req.body.isDisabled === true) : undefined,
+            rollout: req.body.rollout ? parseInt(req.body.rollout) : undefined
+          };
+        }
+      }
+      
+      // Save the uploaded file
+      try {
+        fileMetadata = await fileStorage.saveFile(uploadedFile.buffer, uploadedFile.originalname);
+      } catch (fileError) {
+        console.error('Error saving file:', fileError);
+        return res.status(500).json({ error: 'Failed to save uploaded file' });
+      }
+    } catch (parseError) {
+      return res.status(400).json({ error: 'Invalid packageInfo format' });
+    }
+  } else {
+    // JSON-only request (backward compatible)
+    packageInfo = req.body.packageInfo || req.body || {};
+  }
 
   // Validate package info (appVersion is required)
   const validationErrors = validatePackageInfo(packageInfo, false);
@@ -178,15 +234,43 @@ function postRelease(req, res) {
   // Get package history to check for duplicate
   const history = db.getPackageHistory(deployment.id);
   
-  // Check for duplicate package hash with same app version
-  const packageHash = generatePackageHash(); // In real API, this would be computed from file
-  const lastPackageWithSameVersion = history
-    .slice()
-    .reverse()
-    .find(pkg => pkg.appVersion === packageInfo.appVersion);
+  // Get package hash - use actual hash if file uploaded, otherwise generate mock
+  let packageHash;
+  let packageSize;
+  let blobUrl;
+  let fileName = null;
   
-  if (lastPackageWithSameVersion && lastPackageWithSameVersion.packageHash) {
-    // In real API, we'd compare hashes. For mock, we'll skip this check
+  if (fileMetadata) {
+    // Real file uploaded - use actual metadata
+    packageHash = fileMetadata.hash;
+    packageSize = fileMetadata.size;
+    fileName = fileMetadata.fileName;
+    // Generate download URL - use MockServer gateway (port 1080) so downloads go through it
+    // The /packages route will be forwarded by MockServer to this service
+    // For Android emulator, use 10.0.2.2 instead of localhost
+    // For iOS simulator, localhost works
+    // Note: We use the same server URL format as the update check endpoint
+    const baseUrl = process.env.MOCK_SERVER_URL || 'http://localhost:1080';
+    blobUrl = `${baseUrl}${fileStorage.getDownloadUrl(fileName)}`;
+    
+    // Check for duplicate package hash with same app version
+    const lastPackageWithSameVersion = history
+      .slice()
+      .reverse()
+      .find(pkg => pkg.appVersion === packageInfo.appVersion);
+    
+    if (lastPackageWithSameVersion && lastPackageWithSameVersion.packageHash === packageHash) {
+      // Delete the duplicate file we just saved
+      fileStorage.deleteFile(fileName);
+      return res.status(409).json({ 
+        error: 'A package with the same content hash already exists for this app version.' 
+      });
+    }
+  } else {
+    // No file uploaded - use mock values (backward compatible)
+    packageHash = generatePackageHash();
+    packageSize = packageInfo.size || 1024;
+    blobUrl = generateBlobUrl();
   }
 
   // Get account for releasedBy
@@ -198,17 +282,18 @@ function postRelease(req, res) {
   // Create package data
   const appPackage = {
     appVersion: packageInfo.appVersion,
-    blobUrl: generateBlobUrl(),
+    blobUrl: blobUrl,
     description: packageInfo.description || null,
     isDisabled: packageInfo.isDisabled !== undefined ? packageInfo.isDisabled : false,
     isMandatory: packageInfo.isMandatory !== undefined ? packageInfo.isMandatory : false,
     packageHash: packageHash,
     rollout: packageInfo.rollout !== undefined ? packageInfo.rollout : null,
-    size: packageInfo.size || 1024, // Mock size
+    size: packageSize,
     uploadTime: Date.now(),
     releasedBy: account.email,
     releaseMethod: 'Upload',
-    manifestBlobUrl: null // Optional
+    manifestBlobUrl: null, // Optional
+    fileName: fileName // Store filename for file serving
   };
 
   // Commit package
@@ -246,9 +331,18 @@ function patchRelease(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const appName = req.params.appName;
+  let appName = req.params.appName;
   const deploymentName = req.params.deploymentName;
-  const tenantId = getTenantId(req);
+  let tenantId = getTenantId(req);
+  
+  // Parse appName if it contains tenant/appName format (e.g., "testOrg/testApp")
+  if (appName.includes('/')) {
+    const parts = appName.split('/');
+    if (parts.length === 2 && !tenantId) {
+      tenantId = parts[0];
+      appName = parts[1];
+    }
+  }
   const packageInfo = req.body.packageInfo || req.body || {};
 
   // Validate package info (all fields optional for update)
@@ -403,9 +497,18 @@ function deleteHistory(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const appName = req.params.appName;
+  let appName = req.params.appName;
   const deploymentName = req.params.deploymentName;
-  const tenantId = getTenantId(req);
+  let tenantId = getTenantId(req);
+  
+  // Parse appName if it contains tenant/appName format (e.g., "testOrg/testApp")
+  if (appName.includes('/')) {
+    const parts = appName.split('/');
+    if (parts.length === 2 && !tenantId) {
+      tenantId = parts[0];
+      appName = parts[1];
+    }
+  }
 
   // Check if app exists
   const appExists = db.appExists(appName, tenantId);

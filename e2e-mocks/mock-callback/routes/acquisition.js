@@ -1,4 +1,13 @@
 const db = require('../mock_data');
+const fs = require('fs');
+const path = require('path');
+
+// File-based logging function
+function writeLog(message) {
+  const logFile = '/tmp/update-check.log';
+  const timestamp = new Date().toISOString();
+  fs.appendFileSync(logFile, `[${timestamp}] ${message}\n`);
+}
 
 // Simple semver check (basic implementation)
 function isValidSemver(version) {
@@ -41,6 +50,20 @@ function updateCheck(req, res) {
   const label = req.query.label;
   const isCompanion = req.query.isCompanion === 'true' || req.query.is_companion === 'true';
   const newApi = req.originalUrl.includes('v0.1/public/codepush/update_check') || req.path.includes('v0.1/public/codepush/update_check');
+  
+  // Log the update check request - use file logging as primary method
+  const timestamp = new Date().toISOString();
+  writeLog(`🔍 UPDATE CHECK Request received`);
+  writeLog(`   URL: ${req.originalUrl || req.url}`);
+  writeLog(`   Deployment Key: ${deploymentKey}`);
+  writeLog(`   App Version: ${appVersion}`);
+  writeLog(`   Package Hash: ${packageHash || '(none)'}`);
+  writeLog(`   Label: ${label || '(none)'}`);
+  writeLog(`   Client Unique ID: ${clientUniqueId || '(none)'}`);
+  
+  // Also try console methods
+  console.error(`[UPDATE CHECK] ${timestamp} - ${deploymentKey} - ${appVersion}`);
+  console.log(`[UPDATE CHECK] ${timestamp} - ${deploymentKey} - ${appVersion}`);
 
   // Validate required fields
   if (!deploymentKey) {
@@ -60,6 +83,7 @@ function updateCheck(req, res) {
   // Find deployment by key
   const deployment = db.getDeploymentByKey(deploymentKey);
   if (!deployment) {
+    console.log(`   ❌ Deployment not found for key: ${deploymentKey}`);
     // Return no update if deployment not found
     const noUpdate = {
       updateInfo: {
@@ -70,11 +94,16 @@ function updateCheck(req, res) {
     };
     return res.status(200).send(newApi ? convertToSnakeCase(noUpdate) : noUpdate);
   }
+  
+  console.log(`   ✅ Deployment found: ${deployment.name} (appId: ${deployment.appId})`);
 
   // Get package history
   const packageHistory = db.getPackageHistory(deployment.id);
   
+  console.log(`   📦 Package history: ${packageHistory ? packageHistory.length : 0} packages`);
+  
   if (!packageHistory || packageHistory.length === 0) {
+    console.log(`   ℹ️  No packages found - returning no update`);
     // No packages, return no update
     const noUpdate = {
       updateInfo: {
@@ -144,6 +173,7 @@ function updateCheck(req, res) {
 
   // If no satisfying package found
   if (!latestSatisfyingPackage) {
+    console.log(`   ℹ️  No package satisfies app version ${appVersion}`);
     updateInfo.shouldRunBinaryVersion = true;
     
     // Still provide appVersion info if latest enabled package exists
@@ -152,16 +182,21 @@ function updateCheck(req, res) {
       // If client version is newer than latest, suggest update
       if (!semverSatisfies(appVersion, latestEnabledPackage.appVersion)) {
         updateInfo.updateAppVersion = true;
+        console.log(`   ⚠️  Client app version (${appVersion}) doesn't match latest package version (${latestEnabledPackage.appVersion})`);
       }
     }
 
     const response = { updateInfo: updateInfo };
+    console.log(`   ✅ Response: No update available (shouldRunBinaryVersion=true)`);
+    console.log(`   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
     return res.status(200).send(newApi ? convertToSnakeCase(response) : response);
   }
 
   // If client already has this package, no update
   if (latestSatisfyingPackage.packageHash === packageHash ||
       (label && latestSatisfyingPackage.label === label)) {
+    console.log(`   ✅ Client already has latest package (hash: ${latestSatisfyingPackage.packageHash}, label: ${latestSatisfyingPackage.label})`);
+    console.log(`   ℹ️  Returning: No update available`);
     if (latestEnabledPackage) {
       updateInfo.appVersion = latestEnabledPackage.appVersion;
       if (!semverSatisfies(appVersion, latestEnabledPackage.appVersion)) {
@@ -174,6 +209,13 @@ function updateCheck(req, res) {
   }
 
   // Update is available
+  console.log(`   🎉 UPDATE AVAILABLE!`);
+  console.log(`   📥 Package: ${latestSatisfyingPackage.label} (hash: ${latestSatisfyingPackage.packageHash})`);
+  console.log(`   📦 Size: ${latestSatisfyingPackage.size} bytes`);
+  console.log(`   🔗 Download URL: ${latestSatisfyingPackage.blobUrl}`);
+  console.log(`   📝 Description: ${latestSatisfyingPackage.description || '(none)'}`);
+  console.log(`   ⚠️  Mandatory: ${latestSatisfyingPackage.isMandatory}`);
+  
   updateInfo.isAvailable = true;
   updateInfo.downloadURL = latestSatisfyingPackage.blobUrl || '';
   updateInfo.packageSize = latestSatisfyingPackage.size || 0;
@@ -212,6 +254,8 @@ function updateCheck(req, res) {
   finalUpdateInfo.target_binary_range = finalUpdateInfo.appVersion;
 
   const response = { updateInfo: finalUpdateInfo };
+  console.log(`   ✅ Response: isAvailable=${finalUpdateInfo.isAvailable}, label=${finalUpdateInfo.label}`);
+  console.log(`   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
   return res.status(200).send(newApi ? convertToSnakeCase(response) : response);
 }
 
@@ -246,7 +290,77 @@ function convertToSnakeCase(obj) {
   return result;
 }
 
+// POST /reportStatus/deploy - Report deployment status
+function reportStatusDeploy(req, res) {
+  const deploymentKey = req.body.deploymentKey || req.body.deployment_key;
+  const appVersion = req.body.appVersion || req.body.app_version;
+  const label = req.body.label;
+  const status = req.body.status;
+  const clientUniqueId = req.body.clientUniqueId || req.body.client_unique_id;
+
+  // Validate required fields
+  if (!deploymentKey || !appVersion) {
+    return res.status(400).send(
+      'A deploy status report must contain a valid appVersion and deploymentKey.'
+    );
+  }
+
+  // If label is provided, status must also be provided and valid
+  if (label) {
+    if (!status) {
+      return res.status(400).send(
+        'A deploy status report for a labelled package must contain a valid status.'
+      );
+    }
+    
+    const validStatuses = ['DeploymentSucceeded', 'DeploymentFailed', 'Downloaded'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).send('Invalid status: ' + status);
+    }
+  }
+
+  // For older SDK versions, clientUniqueId is required
+  // For newer versions (1.5.2-beta+), it's optional
+  // For mock, we'll accept requests without clientUniqueId if they have label/status
+  // This matches the behavior where newer SDK versions don't require clientUniqueId
+
+  // In the real implementation, this updates Redis with metrics
+  // For mock, we just log and return success
+  console.log(`[MOCK] Deploy status report: deploymentKey=${deploymentKey}, appVersion=${appVersion}, label=${label}, status=${status}, clientUniqueId=${clientUniqueId}`);
+  
+  return res.sendStatus(200);
+}
+
+// POST /reportStatus/download - Report download status
+function reportStatusDownload(req, res) {
+  const deploymentKey = req.body.deploymentKey || req.body.deployment_key;
+  const label = req.body.label;
+
+  // Validate required fields
+  if (!req.body || !deploymentKey || !label) {
+    return res.status(400).send(
+      'A download status report must contain a valid deploymentKey and package label.'
+    );
+  }
+
+  // In the real implementation, this increments download count in Redis
+  // For mock, we just log and return success
+  console.log(`[MOCK] Download status report: deploymentKey=${deploymentKey}, label=${label}`);
+  
+  return res.sendStatus(200);
+}
+
+// GET /healthcheck - Health check endpoint
+function healthcheck(req, res) {
+  // In the real implementation, this checks Storage, Redis, and Memcached
+  // For mock, we just return healthy
+  return res.status(200).send('Healthy');
+}
+
 module.exports = {
-  updateCheck
+  updateCheck,
+  reportStatusDeploy,
+  reportStatusDownload,
+  healthcheck
 };
 
