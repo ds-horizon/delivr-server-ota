@@ -1,16 +1,14 @@
 version: '3.8'
+
 services:
   mockserver:
-    image: mockserver/mockserver:latest
+    image: mockserver/mockserver:5.12.0
     restart: always
     ports:
       - "1080:1080"
-    volumes:
-      - ./expectations:/config/expectations
     environment:
-      MOCKSERVER_INITIALIZATION_JSON_PATH: /config/expectations/account.json
-    depends_on:
-      - mock-callback
+      MOCKSERVER_LOG_LEVEL: INFO
+      MOCKSERVER_PERSIST_EXPECTATIONS: "true"
 
   mock-callback:
     build: ./mock-callback

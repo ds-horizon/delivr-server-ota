@@ -45,14 +45,17 @@ const upload = multer({
 
 app.use(bodyParser.json());
 
-// Request logging middleware - log all incoming requests
+// Request logging middleware - controllable via LOG_LEVEL
 app.use((req, res, next) => {
-  const timestamp = new Date().toISOString();
-  console.log(`\n📥 [${timestamp}] ${req.method} ${req.originalUrl || req.url}`);
-  if (Object.keys(req.query).length > 0) {
-    console.log(`   Query params:`, req.query);
+  if ((process.env.LOG_LEVEL || '').toLowerCase() === 'debug') {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] ${req.method} ${req.originalUrl || req.url}`);
   }
   next();
+});
+
+app.get("/ping", (req, res) => {
+  res.status(200).json({ message: 'pong' });
 });
 
 // Authentication routes
@@ -141,14 +144,30 @@ function handleMulterError(err, req, res, next) {
 }
 
 // Releases routes
-app.get('/apps/:appName/deployments/:deploymentName/history', releasesRoutes.getHistory);
+// Support both formats: /apps/appName/... and /apps/tenant/appName/...
+// Use wildcard * to match appName with slashes (e.g., "testOrg/testApp")
+app.get('/apps/*/deployments/:deploymentName/history', (req, res) => {
+  req.params.appName = req.params[0]; // Express captures wildcard in params[0]
+  releasesRoutes.getHistory(req, res);
+});
 // Handle file upload for release endpoint with error handling
-app.post('/apps/:appName/deployments/:deploymentName/release', 
+app.post('/apps/*/deployments/:deploymentName/release', 
   upload.single('package'), 
   handleMulterError,
-  releasesRoutes.postRelease);
-app.patch('/apps/:appName/deployments/:deploymentName/release', releasesRoutes.patchRelease);
-app.delete('/apps/:appName/deployments/:deploymentName/history', releasesRoutes.deleteHistory);
+  (req, res, next) => {
+    req.params.appName = req.params[0]; // Express captures wildcard in params[0]
+    releasesRoutes.postRelease(req, res, next);
+  });
+app.patch('/apps/*/deployments/:deploymentName/release', (req, res) => {
+  req.params.appName = req.params[0];
+  releasesRoutes.patchRelease(req, res);
+});
+app.delete('/apps/*/deployments/:deploymentName/history', (req, res) => {
+  req.params.appName = req.params[0];
+  releasesRoutes.deleteHistory(req, res);
+});
+
+
 
 // Access Keys routes
 app.get('/accessKeys', accessKeysRoutes.getAccessKeys);
@@ -159,12 +178,7 @@ app.delete('/accessKeys/:accessKeyName', accessKeysRoutes.deleteAccessKey);
 app.delete('/sessions/:createdBy', accessKeysRoutes.deleteSessions);
 app.get('/accountByaccessKeyName', accessKeysRoutes.getAccountByAccessKeyName);
 
-// Test endpoint to verify logging works
-app.get('/test-logging', (req, res) => {
-  console.log('=== TEST LOGGING ENDPOINT CALLED ===');
-  process.stdout.write('=== TEST LOGGING (stdout) ===\n');
-  res.json({ message: 'Logging test - check docker logs', timestamp: new Date().toISOString() });
-});
+// (removed test-logging endpoint)
 
 // Default 404
 app.all('*', (req, res) => {
@@ -180,8 +194,8 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Mock callback service running on port ${PORT}`);
-  
-  // Initialize pre-configured test data on startup
+  if ((process.env.LOG_LEVEL || '').toLowerCase() === 'debug') {
+    console.log(`Mock callback service running on port ${PORT}`);
+  }
   db.initializePreconfiguredData();
 });

@@ -13,7 +13,7 @@
   {
     "httpRequest": {
       "method": "POST",
-      "path": "/apps/.*"
+      "path": "/apps/.*/deployments/.*/release"
     },
     "httpForward": {
       "host": "mock-callback",

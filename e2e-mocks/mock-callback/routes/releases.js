@@ -132,6 +132,8 @@ function getHistory(req, res) {
 
 // POST /apps/:appName/deployments/:deploymentName/release - Create a new release
 async function postRelease(req, res) {
+  // Handle release request
+  
   const accountId = getUserId(req);
   if (!accountId) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -141,12 +143,15 @@ async function postRelease(req, res) {
   const deploymentName = req.params.deploymentName;
   let tenantId = getTenantId(req);
   
+  // minimal parsing
+  
   // Parse appName if it contains tenant/appName format (e.g., "testOrg/testApp")
   if (appName.includes('/')) {
     const parts = appName.split('/');
     if (parts.length === 2 && !tenantId) {
       tenantId = parts[0];
       appName = parts[1];
+      // parsed
     }
   }
   
@@ -157,43 +162,47 @@ async function postRelease(req, res) {
   
   // Check if file was uploaded (multipart/form-data)
   if (req.file) {
+    // uploaded file
     uploadedFile = req.file;
     
     // Parse packageInfo from form field (if provided)
     try {
-      // First try to parse as JSON string (packageInfo field)
       if (req.body.packageInfo) {
         packageInfo = typeof req.body.packageInfo === 'string' 
           ? JSON.parse(req.body.packageInfo) 
           : req.body.packageInfo;
-      } 
-      // Otherwise, check for flat form fields
-      else {
-        // Support flat form fields - check if any package info fields are present
-        if (req.body.appVersion || req.body.description || req.body.isMandatory !== undefined || req.body.isDisabled !== undefined || req.body.rollout !== undefined) {
-          packageInfo = {
-            appVersion: req.body.appVersion || undefined,
-            description: req.body.description || undefined,
-            isMandatory: req.body.isMandatory === 'true' || req.body.isMandatory === true || req.body.isMandatory === 'false' ? (req.body.isMandatory === 'true' || req.body.isMandatory === true) : undefined,
-            isDisabled: req.body.isDisabled === 'true' || req.body.isDisabled === true || req.body.isDisabled === 'false' ? (req.body.isDisabled === 'true' || req.body.isDisabled === true) : undefined,
-            rollout: req.body.rollout ? parseInt(req.body.rollout) : undefined
-          };
-        }
+        // parsed packageInfo
+      } else if (req.body.appVersion || req.body.description) {
+        // Support flat form fields
+        packageInfo = {
+          appVersion: req.body.appVersion,
+          description: req.body.description,
+          isMandatory: req.body.isMandatory === 'true' || req.body.isMandatory === true,
+          isDisabled: req.body.isDisabled === 'true' || req.body.isDisabled === true,
+          rollout: req.body.rollout ? parseInt(req.body.rollout) : undefined
+        };
+        // parsed flat fields
+      } else {
+        // no packageInfo
       }
       
       // Save the uploaded file
       try {
+        // saving file
         fileMetadata = await fileStorage.saveFile(uploadedFile.buffer, uploadedFile.originalname);
+        // saved file
       } catch (fileError) {
-        console.error('Error saving file:', fileError);
+        console.error('   ❌ Error saving file:', fileError);
         return res.status(500).json({ error: 'Failed to save uploaded file' });
       }
     } catch (parseError) {
+      console.error('Invalid packageInfo format:', parseError.message);
       return res.status(400).json({ error: 'Invalid packageInfo format' });
     }
   } else {
     // JSON-only request (backward compatible)
     packageInfo = req.body.packageInfo || req.body || {};
+    // json body
   }
 
   // Validate package info (appVersion is required)
@@ -210,9 +219,11 @@ async function postRelease(req, res) {
 
   // Get app
   const app = db.getAppByName(accountId, appName, tenantId);
+  // app details ok
 
   // If app exists but user doesn't have access, return 403
   if (!app) {
+    // No access to app
     return res.status(403).json({ error: 'This action requires Collaborator permissions on the app!' });
   }
 
@@ -233,6 +244,7 @@ async function postRelease(req, res) {
 
   // Get package history to check for duplicate
   const history = db.getPackageHistory(deployment.id);
+  // history size not logged
   
   // Get package hash - use actual hash if file uploaded, otherwise generate mock
   let packageHash;
@@ -245,11 +257,7 @@ async function postRelease(req, res) {
     packageHash = fileMetadata.hash;
     packageSize = fileMetadata.size;
     fileName = fileMetadata.fileName;
-    // Generate download URL - use MockServer gateway (port 1080) so downloads go through it
-    // The /packages route will be forwarded by MockServer to this service
-    // For Android emulator, use 10.0.2.2 instead of localhost
-    // For iOS simulator, localhost works
-    // Note: We use the same server URL format as the update check endpoint
+    // Generate download URL via MockServer gateway
     const baseUrl = process.env.MOCK_SERVER_URL || 'http://localhost:1080';
     blobUrl = `${baseUrl}${fileStorage.getDownloadUrl(fileName)}`;
     
@@ -292,8 +300,8 @@ async function postRelease(req, res) {
     uploadTime: Date.now(),
     releasedBy: account.email,
     releaseMethod: 'Upload',
-    manifestBlobUrl: null, // Optional
-    fileName: fileName // Store filename for file serving
+    manifestBlobUrl: null,
+    fileName: fileName
   };
 
   // Commit package
@@ -301,6 +309,7 @@ async function postRelease(req, res) {
   try {
     committedPackage = db.commitPackage(deployment.id, appPackage);
   } catch (error) {
+    console.error(`Error committing package:`, error);
     return res.status(500).json({ error: error.message });
   }
 

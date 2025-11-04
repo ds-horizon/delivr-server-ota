@@ -141,10 +141,11 @@ module.exports = {
   appExists: (appName, tenantId = null) => {
     // Check if app exists regardless of user access
     let searchApps = apps;
-    if (tenantId) {
-      searchApps = apps.filter(app => app.tenantId === tenantId);
-    }
-    return searchApps.find(app => app.name === appName);
+      if (tenantId) {
+        searchApps = apps.filter(app => app.tenantId === tenantId);
+      }
+      const found = searchApps.find(app => app.name === appName);
+    return found;
   },
   deleteApp: (accountId, appId) => {
     const index = apps.findIndex(app => app.id === appId);
@@ -713,13 +714,7 @@ module.exports = {
     };
     accessKeys.push(testAccessKey);
 
-    // console.log('✅ Pre-configured test data initialized:');
-    // console.log(`   - Account: ${testAccountId} (${testAccount.email})`);
-    // console.log(`   - Tenant: ${testTenantId}`);
-    // console.log(`   - App: ${testAppName} (id: ${testApp.id})`);
-    // console.log(`   - Production Deployment Key: ${productionDeployment.key}`);
-    // console.log(`   - Staging Deployment Key: ${stagingDeployment.key}`);
-    // console.log(`   - CLI Access Key: ${testAccessKey.friendlyName} (Bearer cli-${testAccessKey.friendlyName})`);
+  // Pre-configured test data prepared
   }
 };
 
