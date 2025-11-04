@@ -301,7 +301,8 @@ async function postRelease(req, res) {
     releasedBy: account.email,
     releaseMethod: 'Upload',
     manifestBlobUrl: null,
-    fileName: fileName
+    fileName: fileName,
+    isBundlePatchingEnabled: false,
   };
 
   // Commit package
@@ -326,7 +327,8 @@ async function postRelease(req, res) {
     size: committedPackage.size,
     uploadTime: committedPackage.uploadTime,
     releasedBy: committedPackage.releasedBy,
-    releaseMethod: committedPackage.releaseMethod
+    releaseMethod: committedPackage.releaseMethod,
+    isBundlePatchingEnabled: committedPackage.isBundlePatchingEnabled,
   };
 
   res.setHeader('Location', `/apps/${appName}/deployments/${deploymentName}`);
