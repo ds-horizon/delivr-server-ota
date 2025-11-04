@@ -1,12 +1,14 @@
 {
+  "priority": 1,
   "httpRequest": {
     "method": "GET",
     "path": "/tenants"
   },
   "httpForward": {
+    "scheme": "HTTP",
     "host": "mock-callback",
-    "port": 3001,
-    "scheme": "HTTP"
-  }
+    "port": 3001
+  },
+  "times": { "unlimited": true },
+  "timeToLive": { "unlimited": true }
 }
-

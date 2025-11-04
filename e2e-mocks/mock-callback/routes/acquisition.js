@@ -356,6 +356,7 @@ function simpleHash(str) {
 }
 
 // Convert camelCase to snake_case
+// Convert camelCase to snake_case with proper acronym handling
 function convertToSnakeCase(obj) {
   if (obj === null || typeof obj !== 'object') {
     return obj;
@@ -368,12 +369,26 @@ function convertToSnakeCase(obj) {
   const result = {};
   for (const key in obj) {
     if (obj.hasOwnProperty(key)) {
-      const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+      let snakeKey = key;
+
+      // ✅ Acronym-safe rewrite: treat URL suffix as a single word
+      snakeKey = snakeKey.replace(/URL$/, 'Url');
+
+      // ✅ Standard camelCase → snake_case
+      snakeKey = snakeKey
+        .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+        .replace(/([A-Z]+)([A-Z][a-z0-9]+)/g, '$1_$2')
+        .toLowerCase();
+
+      // ✅ Defensive cleanup for edge cases
+      snakeKey = snakeKey.replace(/_u_r_l/g, '_url');
+
       result[snakeKey] = convertToSnakeCase(obj[key]);
     }
   }
   return result;
 }
+
 
 // POST /reportStatus/deploy - Report deployment status
 function reportStatusDeploy(req, res) {
