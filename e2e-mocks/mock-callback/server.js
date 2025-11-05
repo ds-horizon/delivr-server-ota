@@ -58,6 +58,13 @@ app.get("/ping", (req, res) => {
   res.status(200).json({ message: 'pong' });
 });
 
+// Test utility routes (for E2E test isolation)
+app.post('/api/test/reset-releases', (req, res) => {
+  console.log('🔄 Resetting releases for test isolation...');
+  db.resetReleases();
+  res.status(200).json({ success: true, message: 'All releases cleared' });
+});
+
 // Authentication routes
 app.get('/authenticated', authenticationRoutes.getAuthenticated);
 

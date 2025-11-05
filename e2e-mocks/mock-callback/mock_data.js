@@ -626,6 +626,19 @@ module.exports = {
   },
 
   /**
+   * Reset only releases (packageHistory) - keeps accounts, apps, and deployments
+   * Useful for test isolation - clears releases between tests without losing setup data
+   */
+  resetReleases: () => {
+    // Clear packageHistory for all deployments
+    deployments.forEach(deployment => {
+      deployment.packageHistory = [];
+      deployment.package = null;
+    });
+    console.log('✅ Reset releases for all deployments');
+  },
+
+  /**
    * Initialize pre-configured test data
    * Creates default account, tenant, app, and deployment for testing
    * This data is automatically created when the server starts
