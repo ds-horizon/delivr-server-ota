@@ -83,6 +83,7 @@ app.delete('/apps/:appName', appsRoutes.deleteApp);
 
 // Tenants routes
 app.get('/tenants', tenantsRoutes.getTenants);
+app.post('/api/v1/new/apps', tenantsRoutes.createTenant); 
 app.delete('/tenants/:tenantId', tenantsRoutes.deleteTenant);
 
 // Collaborators routes
