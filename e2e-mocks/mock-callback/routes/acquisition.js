@@ -136,7 +136,8 @@ function updateCheck(req, res) {
       updateInfo: {
         isAvailable: false,
         shouldRunBinaryVersion: true,
-        appVersion: appVersion
+        appVersion: appVersion,
+        isBundlePatchingEnabled: false
       }
     };
     return res.status(200).send(newApi ? convertToSnakeCase(noUpdate) : noUpdate);
@@ -158,7 +159,8 @@ function updateCheck(req, res) {
       updateInfo: {
         isAvailable: false,
         shouldRunBinaryVersion: true,
-        appVersion: appVersion
+        appVersion: appVersion,
+        isBundlePatchingEnabled: false
       }
     };
     return res.status(200).send(newApi ? convertToSnakeCase(noUpdate) : noUpdate);
@@ -284,6 +286,7 @@ function updateCheck(req, res) {
       updateInfo.updateAppVersion = true;
       updateInfo.appVersion = latestEnabledPackage.appVersion;
     }
+    updateInfo.isBundlePatchingEnabled = latestEnabledPackage.isBundlePatchingEnabled || false;
 
     const response = { updateInfo: updateInfo };
     // minimal
@@ -328,7 +331,8 @@ function updateCheck(req, res) {
           packageHash: rolloutPackage.packageHash || '',
           description: rolloutPackage.description || '',
           isMandatory: rolloutPackage.isMandatory || false,
-          appVersion: rolloutPackage.appVersion
+          appVersion: rolloutPackage.appVersion,
+          isBundlePatchingEnabled: rolloutPackage.isBundlePatchingEnabled || false,
         };
       }
     }

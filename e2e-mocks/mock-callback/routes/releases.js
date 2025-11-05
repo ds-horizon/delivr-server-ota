@@ -64,7 +64,12 @@ function validatePackageInfo(packageInfo, allOptional = false) {
   if (packageInfo.isMandatory !== undefined && !isValidBoolean(packageInfo.isMandatory)) {
     errors.push({ field: 'isMandatory', message: 'Field is invalid' });
   }
-  
+  if (
+    packageInfo.isBundlePatchingEnabled !== undefined &&
+    !isValidBoolean(packageInfo.isBundlePatchingEnabled)
+  ) {
+    errors.push({ field: 'isBundlePatchingEnabled', message: 'Field is invalid' });
+  }
   return errors;
 }
 
@@ -179,7 +184,8 @@ async function postRelease(req, res) {
           description: req.body.description,
           isMandatory: req.body.isMandatory === 'true' || req.body.isMandatory === true,
           isDisabled: req.body.isDisabled === 'true' || req.body.isDisabled === true,
-          rollout: req.body.rollout ? parseInt(req.body.rollout) : undefined
+          rollout: req.body.rollout ? parseInt(req.body.rollout) : undefined,
+          isBundlePatchingEnabled: req.body.isBundlePatchingEnabled === 'true' || req.body.isBundlePatchingEnabled === true,
         };
         // parsed flat fields
       } else {
@@ -242,10 +248,6 @@ async function postRelease(req, res) {
     });
   }
 
-  // Get package history to check for duplicate
-  const history = db.getPackageHistory(deployment.id);
-  // history size not logged
-  
   // Get package hash - use actual hash if file uploaded, otherwise generate mock
   let packageHash;
   let packageSize;
@@ -260,25 +262,60 @@ async function postRelease(req, res) {
     // Generate download URL via MockServer gateway
     const baseUrl = process.env.MOCK_SERVER_URL || 'http://localhost:1080';
     blobUrl = `${baseUrl}${fileStorage.getDownloadUrl(fileName)}`;
+  } else {
+    // No file uploaded - use mock values (backward compatible)
+    packageHash = generatePackageHash();
+    packageSize = packageInfo.size || 1024;
+    blobUrl = generateBlobUrl();
+  }
+  
+  // Check for duplicate package hash with same app version
+  // This must happen BEFORE committing the package to history
+  // Check ALL packages with the same version and hash
+  if (fileMetadata && packageHash) {
+    // Ensure packageHistory exists on deployment (deployment is already the live object from the array)
+    if (!deployment.packageHistory) {
+      deployment.packageHistory = [];
+    }
     
-    // Check for duplicate package hash with same app version
-    const lastPackageWithSameVersion = history
-      .slice()
-      .reverse()
-      .find(pkg => pkg.appVersion === packageInfo.appVersion);
+    // Debug: Log what we're checking
+    console.log(`[DUPLICATE CHECK] Checking for duplicate: appVersion=${packageInfo.appVersion}, hash=${packageHash}, historyLength=${deployment.packageHistory.length}`);
+    if (deployment.packageHistory.length > 0) {
+      console.log(`[DUPLICATE CHECK] History packages:`, deployment.packageHistory.map(p => ({
+        label: p.label,
+        appVersion: p.appVersion,
+        hash: p.packageHash
+      })));
+    }
     
-    if (lastPackageWithSameVersion && lastPackageWithSameVersion.packageHash === packageHash) {
+    // Check all packages with matching app version and hash
+    // Use strict equality for hash comparison (hash should always be a hex string)
+    const duplicatePackage = deployment.packageHistory.find(pkg => {
+      if (!pkg.appVersion || !pkg.packageHash) {
+        return false;
+      }
+      // Compare app version (should match exactly)
+      const versionMatch = String(pkg.appVersion) === String(packageInfo.appVersion);
+      // Compare hash (should match exactly - hash is always a hex string)
+      const hashMatch = String(pkg.packageHash) === String(packageHash);
+      
+      if (versionMatch && hashMatch) {
+        console.log(`[DUPLICATE CHECK] Match found: existing pkg.label=${pkg.label}, pkg.appVersion=${pkg.appVersion}, pkg.hash=${pkg.packageHash}`);
+      }
+      
+      return versionMatch && hashMatch;
+    });
+    
+    if (duplicatePackage) {
+      console.log(`[DUPLICATE CHECK] DUPLICATE FOUND! Existing package: label=${duplicatePackage.label}, appVersion=${duplicatePackage.appVersion}, hash=${duplicatePackage.packageHash}`);
       // Delete the duplicate file we just saved
       fileStorage.deleteFile(fileName);
       return res.status(409).json({ 
         error: 'A package with the same content hash already exists for this app version.' 
       });
     }
-  } else {
-    // No file uploaded - use mock values (backward compatible)
-    packageHash = generatePackageHash();
-    packageSize = packageInfo.size || 1024;
-    blobUrl = generateBlobUrl();
+    
+    console.log(`[DUPLICATE CHECK] No duplicate found, proceeding with commit`);
   }
 
   // Get account for releasedBy
@@ -302,13 +339,15 @@ async function postRelease(req, res) {
     releaseMethod: 'Upload',
     manifestBlobUrl: null,
     fileName: fileName,
-    isBundlePatchingEnabled: false,
+    isBundlePatchingEnabled: packageInfo.isBundlePatchingEnabled !== undefined ? packageInfo.isBundlePatchingEnabled : false,
   };
 
   // Commit package
   let committedPackage;
   try {
     committedPackage = db.commitPackage(deployment.id, appPackage);
+    console.log('--------------------------------');
+    console.log('committedPackage', committedPackage);
   } catch (error) {
     console.error(`Error committing package:`, error);
     return res.status(500).json({ error: error.message });
@@ -332,6 +371,8 @@ async function postRelease(req, res) {
   };
 
   res.setHeader('Location', `/apps/${appName}/deployments/${deploymentName}`);
+  console.log('--------------------------------');
+  console.log('restPackage', restPackage);
   return res.status(201).json({ package: restPackage });
 }
 
@@ -495,7 +536,8 @@ function patchRelease(req, res) {
     size: packageToUpdate.size,
     uploadTime: packageToUpdate.uploadTime,
     releasedBy: packageToUpdate.releasedBy,
-    releaseMethod: packageToUpdate.releaseMethod || 'Upload'
+    releaseMethod: packageToUpdate.releaseMethod || 'Upload',
+    isBundlePatchingEnabled: packageToUpdate.isBundlePatchingEnabled,
   };
 
   return res.status(200).json({ package: restPackage });

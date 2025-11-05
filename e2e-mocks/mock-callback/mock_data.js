@@ -227,112 +227,113 @@ module.exports = {
     return deployment;
   },
   
-  // ========================================================================
-  // PACKAGE/RELEASE MANAGEMENT
-  // ========================================================================
-  // Packages represent code releases deployed to a deployment environment
-  // Stored in deployment.packageHistory[] array
-  // Fields: label (v1, v2, v3...), appVersion, blobUrl, packageHash, rollout, etc.
-  getPackageHistory: (deploymentId) => {
-    const deployment = deployments.find(d => d.id === deploymentId);
-    if (!deployment) return [];
-    return deployment.packageHistory || [];
-  },
-  commitPackage: (deploymentId, appPackage) => {
-    const deployment = deployments.find(d => d.id === deploymentId);
-    if (!deployment) {
-      throw new Error('Deployment not found');
-    }
-    
-    // Initialize packageHistory if not exists
-    if (!deployment.packageHistory) {
-      deployment.packageHistory = [];
-    }
-    
-    // Get next label
-    const history = deployment.packageHistory;
-    let label;
-    if (history.length === 0) {
-      label = 'v1';
-    } else {
-      const lastLabel = history[history.length - 1].label;
-      const lastVersion = parseInt(lastLabel.substring(1));
-      label = 'v' + (lastVersion + 1);
-    }
-    
-    // Create package with label
-    const packageData = {
-      ...appPackage,
-      label: label,
-      uploadTime: appPackage.uploadTime || Date.now(),
-      releaseMethod: appPackage.releaseMethod || 'Upload'
-    };
-    
-    // Add to history
-    deployment.packageHistory.push(packageData);
-    
-    // Update deployment's current package
-    deployment.package = packageData;
-    
-    // Limit history to 100 packages
-    if (deployment.packageHistory.length > 100) {
-      deployment.packageHistory = deployment.packageHistory.slice(-100);
-    }
-    
-    return packageData;
-  },
-  updatePackageInHistory: (deploymentId, label, updates) => {
-    const deployment = deployments.find(d => d.id === deploymentId);
-    if (!deployment || !deployment.packageHistory) {
-      throw new Error('Deployment not found or has no history');
-    }
-    
-    // Find package by label (search from end)
-    for (let i = deployment.packageHistory.length - 1; i >= 0; i--) {
-      if (deployment.packageHistory[i].label === label) {
-        // Update package
-        Object.assign(deployment.packageHistory[i], updates);
-        
-        // Update current package if it's the same
-        if (deployment.package && deployment.package.label === label) {
-          Object.assign(deployment.package, updates);
-        }
-        
-        return deployment.packageHistory[i];
-      }
-    }
-    
-    throw new Error('Package with label not found');
-  },
-  updatePackageHistory: (deploymentId, packageHistory) => {
-    const deployment = deployments.find(d => d.id === deploymentId);
-    if (!deployment) {
-      throw new Error('Deployment not found');
-    }
-    
-    // Replace the entire package history
-    deployment.packageHistory = packageHistory;
-    
-    // Update current package to be the last one in history
-    if (packageHistory && packageHistory.length > 0) {
-      deployment.package = packageHistory[packageHistory.length - 1];
-    } else {
-      deployment.package = null;
-    }
-    
-    return true;
-  },
-  clearPackageHistory: (deploymentId) => {
-    const deployment = deployments.find(d => d.id === deploymentId);
-    if (!deployment) {
-      throw new Error('Deployment not found');
-    }
-    
+// ========================================================================
+// PACKAGE/RELEASE MANAGEMENT
+// ========================================================================
+// Packages represent code releases deployed to a deployment environment
+// Stored in deployment.packageHistory[] array
+// Fields: label (v1, v2, v3...), appVersion, blobUrl, packageHash, rollout, etc.
+getPackageHistory: (deploymentId) => {
+  const deployment = deployments.find(d => d.id === deploymentId);
+  if (!deployment) return [];
+  return deployment.packageHistory || [];
+},
+
+commitPackage: (deploymentId, appPackage) => {
+  const deployment = deployments.find(d => d.id === deploymentId);
+  if (!deployment) {
+    throw new Error('Deployment not found');
+  }
+
+  if (!deployment.packageHistory) {
     deployment.packageHistory = [];
+  }
+
+  const history = deployment.packageHistory;
+  let label;
+  if (history.length === 0) {
+    label = 'v1';
+  } else {
+    const lastLabel = history[history.length - 1].label;
+    const lastVersion = parseInt(lastLabel.substring(1));
+    label = 'v' + (lastVersion + 1);
+  }
+
+  const packageData = {
+    ...appPackage,
+    label,
+    uploadTime: appPackage.uploadTime || Date.now(),
+    releaseMethod: appPackage.releaseMethod || 'Upload',
+    isBundlePatchingEnabled: appPackage.isBundlePatchingEnabled || false 
+  };
+
+  deployment.packageHistory.push(packageData);
+  deployment.package = packageData;
+
+  if (deployment.packageHistory.length > 100) {
+    deployment.packageHistory = deployment.packageHistory.slice(-100);
+  }
+
+  return packageData;
+},
+
+updatePackageInHistory: (deploymentId, label, updates) => {
+  const deployment = deployments.find(d => d.id === deploymentId);
+  if (!deployment || !deployment.packageHistory) {
+    throw new Error('Deployment not found or has no history');
+  }
+
+  for (let i = deployment.packageHistory.length - 1; i >= 0; i--) {
+    if (deployment.packageHistory[i].label === label) {
+
+      // ✅ Ensure the field is included during updates
+      const updatedData = {
+        ...updates,
+        isBundlePatchingEnabled: updates.isBundlePatchingEnabled || false,
+      };
+
+      Object.assign(deployment.packageHistory[i], updatedData);
+
+      if (deployment.package && deployment.package.label === label) {
+        Object.assign(deployment.package, updatedData);
+      }
+
+      return deployment.packageHistory[i];
+    }
+  }
+
+  throw new Error('Package with label not found');
+},
+
+updatePackageHistory: (deploymentId, packageHistory) => {
+  const deployment = deployments.find(d => d.id === deploymentId);
+  if (!deployment) {
+    throw new Error('Deployment not found');
+  }
+
+  deployment.packageHistory = packageHistory;
+
+  if (packageHistory && packageHistory.length > 0) {
+    deployment.package = packageHistory[packageHistory.length - 1];
+  } else {
     deployment.package = null;
-    
-    return true;
-  },
+  }
+
+  return true;
+},
+
+clearPackageHistory: (deploymentId) => {
+  const deployment = deployments.find(d => d.id === deploymentId);
+  if (!deployment) {
+    throw new Error('Deployment not found');
+  }
+
+  deployment.packageHistory = [];
+  deployment.package = null;
+
+  return true;
+},
+
 
   // ========================================================================
   // COLLABORATOR OPERATIONS
