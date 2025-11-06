@@ -106,6 +106,54 @@ app.get('/apps/:appName/deployments/:deploymentName', deploymentsRoutes.getDeplo
 app.patch('/apps/:appName/deployments/:deploymentName', deploymentsRoutes.patchDeployment);
 app.delete('/apps/:appName/deployments/:deploymentName', deploymentsRoutes.deleteDeployment);
 
+// Promote release between deployments
+app.post('/apps/:appName/deployments/:sourceDeployment/promote/:targetDeployment', async (req, res) => {
+  const accountId = req.headers.authorization?.replace('Bearer ', '');
+  if (!accountId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { appName, sourceDeployment, targetDeployment } = req.params;
+  const { appVersion, description, isDisabled, isMandatory, label } = req.body;
+
+  // Get source deployment's release
+  const app = db.getAppByName(accountId, appName, req.headers.tenant);
+  if (!app) {
+    return res.status(404).json({ error: 'App not found' });
+  }
+
+  const sourceDepl = db.getDeployments(app.id).find(d => d.name === sourceDeployment);
+  if (!sourceDepl) {
+    return res.status(404).json({ error: `Source deployment "${sourceDeployment}" not found` });
+  }
+
+  const targetDepl = db.getDeployments(app.id).find(d => d.name === targetDeployment);
+  if (!targetDepl) {
+    return res.status(404).json({ error: `Target deployment "${targetDeployment}" not found` });
+  }
+
+  // Find the release to promote
+  const releaseToPromote = sourceDepl.packageHistory.find(pkg => pkg.label === label);
+  if (!releaseToPromote) {
+    return res.status(404).json({ error: 'Release not found in source deployment' });
+  }
+
+  // Create a copy of the release in target deployment
+  const promotedRelease = {
+    ...releaseToPromote,
+    uploadTime: Date.now(),
+    releaseMethod: 'Promote',
+    description: description || releaseToPromote.description,
+    isDisabled: isDisabled !== undefined ? isDisabled : releaseToPromote.isDisabled,
+    isMandatory: isMandatory !== undefined ? isMandatory : releaseToPromote.isMandatory,
+  };
+
+  // Add to target deployment
+  const committed = db.commitPackage(targetDepl.id, promotedRelease);
+
+  return res.status(201).json({ package: committed });
+});
+
 // File serving route - serves uploaded packages
 app.get('/packages/:fileName', (req, res) => {
   const fileName = req.params.fileName;
