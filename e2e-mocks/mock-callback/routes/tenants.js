@@ -21,6 +21,7 @@ function getTenants(req, res) {
 }
 
 // DELETE /tenants/:tenantId - Delete a tenant/organization
+// Tenants are always static - validates all scenarios but doesn't delete
 function deleteTenant(req, res) {
   const accountId = getUserId(req);
   if (!accountId) {
@@ -32,18 +33,20 @@ function deleteTenant(req, res) {
     return res.status(400).json({ error: 'Tenant ID is required' });
   }
 
-  try {
-    db.removeTenant(accountId, tenantId);
-    return res.status(201).send('Org deleted successfully');
-  } catch (error) {
-    if (error.message === 'Specified Organisation does not exist.') {
-      return res.status(404).json({ error: error.message });
-    }
-    if (error.message === 'User does not have admin permissions for the specified tenant.') {
-      return res.status(403).json({ error: error.message });
-    }
-    return res.status(500).json({ error: error.message });
+  // Validate tenant exists and user has permissions (matches real implementation behavior)
+  const tenant = db.getTenant(tenantId);
+  if (!tenant) {
+    return res.status(404).json({ error: 'Specified Organisation does not exist.' });
   }
+
+  // Check if user is the owner (createdBy)
+  if (tenant.createdBy !== accountId) {
+    return res.status(403).json({ error: 'User does not have admin permissions for the specified tenant.' });
+  }
+
+  // Tenants are static - validate all scenarios but don't delete
+  // Return success response as if tenant was deleted (matches real implementation)
+  return res.status(201).send('Org deleted successfully');
 }
 
 module.exports = {

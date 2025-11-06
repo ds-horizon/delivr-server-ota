@@ -1,0 +1,9 @@
+[
+  {
+    "email": "test@example.com",
+    "accountId": "test-user",
+    "appId": "app-testapp-static",
+    "permission": "Owner"
+  }
+]
+

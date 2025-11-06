@@ -1,0 +1,9 @@
+[
+  {
+    "id": "test-user",
+    "name": "Test User",
+    "email": "test@example.com",
+    "linkedProviders": []
+  }
+]
+

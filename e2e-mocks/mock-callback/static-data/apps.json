@@ -1,0 +1,10 @@
+[
+  {
+    "id": "app-testapp-static",
+    "name": "testApp",
+    "accountId": "test-user",
+    "tenantId": "testOrg",
+    "createdTime": 1700000000000
+  }
+]
+

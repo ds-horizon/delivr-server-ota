@@ -1,60 +1,3 @@
-/**
- * MOCK_DATA.JS - In-Memory Database for Mock APIs
- * 
- * PURPOSE:
- * This file implements a stateful, in-memory database that simulates backend storage
- * for the CodePush mock API service. Unlike static JSON mocks, this provides:
- * - Stateful persistence across requests (data created via POST persists for GET)
- * - Entity relationships (apps belong to accounts, deployments belong to apps, etc.)
- * - Business logic validation (duplicate prevention, permission checks, etc.)
- * - Cascading operations (deleting app also deletes deployments/collaborators)
- * 
- * ARCHITECTURE:
- * - Uses simple JavaScript arrays to store entities (no external database)
- * - All operations are synchronous (no async/await needed)
- * - Data persists only while the mock-callback container is running
- * - Relationships maintained via ID references (foreign keys)
- * 
- * DATA STRUCTURE:
- * ┌─────────────┐
- * │   accounts  │ → User accounts (id, name, email, linkedProviders)
- * └──────┬──────┘
- *        │
- *        ├─→ apps[] → Applications (id, name, accountId, tenantId, createdTime)
- *        │     │
- *        │     ├─→ deployments[] → Deployment environments (id, name, key, appId)
- *        │     │     │
- *        │     │     └─→ packageHistory[] → Release packages (label, appVersion, etc.)
- *        │     │
- *        │     └─→ collaborators[] → Permission mappings (email, accountId, appId, permission)
- *        │
- *        ├─→ accessKeys[] → API keys (id, name, friendlyName, accountId, expires)
- *        │
- *        └─→ tenants[] → Organizations (id, displayName, createdBy)
- *              │
- *              └─→ apps[] → Apps belonging to tenant
- * 
- * KEY FUNCTIONS:
- * - CRUD operations for each entity type (add, get, update, delete)
- * - Permission checking (isOwner, hasAccess)
- * - Relationship management (cascading deletes, linking entities)
- * - Business logic (duplicate checking, validation, label generation)
- * 
- * USAGE:
- * All route handlers (routes/*.js) import this module:
- *   const db = require('../mock_data');
- * 
- * Example:
- *   const account = db.getAccount(userId);
- *   const newApp = db.addApp({ name: 'MyApp', accountId: userId });
- * 
- * LIFETIME:
- * - Data exists in memory only
- * - Persists across requests within same container lifecycle
- * - Lost when container stops/restarts
- * - Can be reset via reset() function for testing
- */
-
 // ============================================================================
 // DATA STORAGE - In-memory arrays for each entity type
 // ============================================================================
@@ -76,6 +19,9 @@ let deploymentKeyCounter = 1;
 // UTILITY FUNCTIONS
 // ============================================================================
 
+const fs = require('fs');
+const path = require('path');
+
 /**
  * Generates a unique ID for entities
  * Format: {prefix}-{timestamp}-{random}
@@ -83,6 +29,114 @@ let deploymentKeyCounter = 1;
  */
 function generateId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
+ * Load static accounts data from JSON file
+ * Returns empty array if file doesn't exist or can't be read
+ */
+function loadStaticAccounts() {
+  try {
+    const staticDataPath = path.join(__dirname, 'static-data', 'accounts.json');
+    if (fs.existsSync(staticDataPath)) {
+      const fileContent = fs.readFileSync(staticDataPath, 'utf8');
+      const staticAccounts = JSON.parse(fileContent);
+      return Array.isArray(staticAccounts) ? staticAccounts : [];
+    }
+  } catch (error) {
+    console.error('Error loading static accounts data:', error);
+  }
+  return [];
+}
+
+/**
+ * Load static apps data from JSON file
+ * Returns empty array if file doesn't exist or can't be read
+ */
+function loadStaticApps() {
+  try {
+    const staticDataPath = path.join(__dirname, 'static-data', 'apps.json');
+    if (fs.existsSync(staticDataPath)) {
+      const fileContent = fs.readFileSync(staticDataPath, 'utf8');
+      const staticApps = JSON.parse(fileContent);
+      return Array.isArray(staticApps) ? staticApps : [];
+    }
+  } catch (error) {
+    console.error('Error loading static apps data:', error);
+  }
+  return [];
+}
+
+/**
+ * Load static access keys data from JSON file
+ * Returns empty array if file doesn't exist or can't be read
+ */
+function loadStaticAccessKeys() {
+  try {
+    const staticDataPath = path.join(__dirname, 'static-data', 'accesskeys.json');
+    if (fs.existsSync(staticDataPath)) {
+      const fileContent = fs.readFileSync(staticDataPath, 'utf8');
+      const staticAccessKeys = JSON.parse(fileContent);
+      return Array.isArray(staticAccessKeys) ? staticAccessKeys : [];
+    }
+  } catch (error) {
+    console.error('Error loading static access keys data:', error);
+  }
+  return [];
+}
+
+/**
+ * Load static tenants data from JSON file
+ * Returns empty array if file doesn't exist or can't be read
+ */
+function loadStaticTenants() {
+  try {
+    const staticDataPath = path.join(__dirname, 'static-data', 'tenants.json');
+    if (fs.existsSync(staticDataPath)) {
+      const fileContent = fs.readFileSync(staticDataPath, 'utf8');
+      const staticTenants = JSON.parse(fileContent);
+      return Array.isArray(staticTenants) ? staticTenants : [];
+    }
+  } catch (error) {
+    console.error('Error loading static tenants data:', error);
+  }
+  return [];
+}
+
+/**
+ * Load static collaborators data from JSON file
+ * Returns empty array if file doesn't exist or can't be read
+ */
+function loadStaticCollaborators() {
+  try {
+    const staticDataPath = path.join(__dirname, 'static-data', 'collaborators.json');
+    if (fs.existsSync(staticDataPath)) {
+      const fileContent = fs.readFileSync(staticDataPath, 'utf8');
+      const staticCollaborators = JSON.parse(fileContent);
+      return Array.isArray(staticCollaborators) ? staticCollaborators : [];
+    }
+  } catch (error) {
+    console.error('Error loading static collaborators data:', error);
+  }
+  return [];
+}
+
+/**
+ * Load static deployments data from JSON file
+ * Returns empty array if file doesn't exist or can't be read
+ */
+function loadStaticDeployments() {
+  try {
+    const staticDataPath = path.join(__dirname, 'static-data', 'deployments.json');
+    if (fs.existsSync(staticDataPath)) {
+      const fileContent = fs.readFileSync(staticDataPath, 'utf8');
+      const staticDeployments = JSON.parse(fileContent);
+      return Array.isArray(staticDeployments) ? staticDeployments : [];
+    }
+  } catch (error) {
+    console.error('Error loading static deployments data:', error);
+  }
+  return [];
 }
 
 // ============================================================================
@@ -635,87 +689,138 @@ clearPackageHistory: (deploymentId) => {
     // Reset any existing data first
     module.exports.reset();
 
-    // 1. Create test account
-    const testAccountId = 'test-user';
-    const testAccount = {
-      id: testAccountId,
-      name: 'Test User',
-      email: 'test@example.com',
-      linkedProviders: []
-    };
-    accounts.push(testAccount);
+    // 1. Load accounts from static data file
+    const staticAccounts = loadStaticAccounts();
+    if (staticAccounts.length > 0) {
+      accounts.push(...staticAccounts);
+    } else {
+      // Fallback to programmatic creation if static file doesn't exist
+      const testAccountId = 'test-user';
+      const testAccount = {
+        id: testAccountId,
+        name: 'Test User',
+        email: 'test@example.com',
+        linkedProviders: []
+      };
+      accounts.push(testAccount);
+    }
 
-    // 2. Create test tenant/organization
-    // Note: displayName must match what CLI uses (testOrg/testApp format)
-    const testTenantId = 'testOrg';
-    const testTenant = {
-      id: testTenantId,
-      displayName: 'testOrg', // Must match CLI app name format
-      createdBy: testAccountId,
-      createdAt: Date.now()
-    };
-    tenants.push(testTenant);
+    // Get test account ID (from static data or fallback)
+    const testAccountId = accounts.length > 0 ? accounts[0].id : 'test-user';
+    const testAccount = accounts[0];
 
-    // 3. Create test app
-    const testAppName = 'testApp';
-    const testApp = {
-      id: generateId('app'),
-      name: testAppName,
-      accountId: testAccountId,
-      tenantId: testTenantId,
-      createdTime: Date.now()
-    };
-    apps.push(testApp);
+    // 2. Load tenants from static data file
+    const staticTenants = loadStaticTenants();
+    if (staticTenants.length > 0) {
+      tenants.push(...staticTenants);
+    } else {
+      // Fallback to programmatic creation if static file doesn't exist
+      // Create test tenant/organization
+      // Note: displayName must match what CLI uses (testOrg/testApp format)
+      const testTenantId = 'testOrg';
+      const testTenant = {
+        id: testTenantId,
+        displayName: 'testOrg', // Must match CLI app name format
+        createdBy: testAccountId,
+        createdAt: Date.now()
+      };
+      tenants.push(testTenant);
+    }
 
-    // 4. Create Production deployment with the expected key
-    const productionDeployment = {
-      id: generateId('deployment'),
-      name: 'Production',
-      key: 'deployment-key-1',
-      appId: testApp.id,
-      createdTime: Date.now(),
-      packageHistory: [],
-      package: null
-    };
-    deployments.push(productionDeployment);
+    // Get test tenant ID (from static data or fallback)
+    const testTenantId = tenants.length > 0 ? tenants[0].id : 'testOrg';
 
-    // 5. Create Staging deployment (optional, but useful for testing)
-    const stagingDeployment = {
-      id: generateId('deployment'),
-      name: 'Staging',
-      key: 'deployment-key-2',
-      appId: testApp.id,
-      createdTime: Date.now(),
-      packageHistory: [],
-      package: null
-    };
-    deployments.push(stagingDeployment);
+    // 3. Load apps from static data file
+    const staticApps = loadStaticApps();
+    if (staticApps.length > 0) {
+      apps.push(...staticApps);
+    } else {
+      // Fallback to programmatic creation if static file doesn't exist
+      const testAppName = 'testApp';
+      const testApp = {
+        id: generateId('app'),
+        name: testAppName,
+        accountId: testAccountId,
+        tenantId: testTenantId,
+        createdTime: Date.now()
+      };
+      apps.push(testApp);
+    }
 
-    // 6. Add test-user as owner collaborator for the app
-    collaborators.push({
-      email: testAccount.email,
-      accountId: testAccountId,
-      appId: testApp.id,
-      permission: 'Owner'
-    });
+    // Get test app (from static data or fallback)
+    const testApp = apps[0];
 
-    // 7. Create access key for CLI authentication (named "test-user")
-    // CLI sends "Bearer cli-test-user", so we need an access key with friendlyName "test-user"
-    const accessKeyExpiry = Date.now() + (90 * 24 * 60 * 60 * 1000); // 90 days from now
-    const testAccessKey = {
-      id: generateId('accesskey'),
-      name: `cli-${testAccountId}`, // CLI uses this as the actual key
-      friendlyName: testAccountId, // This is what CLI references
-      accountId: testAccountId,
-      expires: accessKeyExpiry,
-      createdTime: Date.now(),
-      isSession: false,
-      createdBy: testAccountId,
-      scope: null
-    };
-    accessKeys.push(testAccessKey);
+    // 4. Load deployments from static data file
+    const staticDeployments = loadStaticDeployments();
+    if (staticDeployments.length > 0) {
+      deployments.push(...staticDeployments);
+    } else {
+      // Fallback to programmatic creation if static file doesn't exist
+      // Create Production deployment with the expected key
+      const productionDeployment = {
+        id: generateId('deployment'),
+        name: 'Production',
+        key: 'deployment-key-1',
+        appId: testApp.id,
+        createdTime: Date.now(),
+        packageHistory: [],
+        package: null
+      };
+      deployments.push(productionDeployment);
 
-  // Pre-configured test data prepared
+      // Create Staging deployment (optional, but useful for testing)
+      const stagingDeployment = {
+        id: generateId('deployment'),
+        name: 'Staging',
+        key: 'deployment-key-2',
+        appId: testApp.id,
+        createdTime: Date.now(),
+        packageHistory: [],
+        package: null
+      };
+      deployments.push(stagingDeployment);
+    }
+
+    // 5. Load collaborators from static data file
+    const staticCollaborators = loadStaticCollaborators();
+    if (staticCollaborators.length > 0) {
+      collaborators.push(...staticCollaborators);
+    } else {
+      // Fallback to programmatic creation if static file doesn't exist
+      // Add test-user as owner collaborator for the app
+      collaborators.push({
+        email: testAccount.email,
+        accountId: testAccountId,
+        appId: testApp.id,
+        permission: 'Owner'
+      });
+    }
+
+    // 7. Load access keys from static data file
+    const staticAccessKeys = loadStaticAccessKeys();
+    if (staticAccessKeys.length > 0) {
+      accessKeys.push(...staticAccessKeys);
+    } else {
+      // Fallback to programmatic creation if static file doesn't exist
+      // Create access key for CLI authentication (named "test-user")
+      // CLI sends "Bearer cli-test-user", so we need an access key with friendlyName "test-user"
+      const accessKeyExpiry = Date.now() + (90 * 24 * 60 * 60 * 1000); // 90 days from now
+      const testAccessKey = {
+        id: generateId('accesskey'),
+        name: `cli-${testAccountId}`, // CLI uses this as the actual key
+        friendlyName: testAccountId, // This is what CLI references
+        accountId: testAccountId,
+        expires: accessKeyExpiry,
+        createdTime: Date.now(),
+        isSession: false,
+        createdBy: testAccountId,
+        scope: null,
+        description: testAccountId
+      };
+      accessKeys.push(testAccessKey);
+    }
+
+    // Pre-configured test data prepared
   }
 };
 

@@ -80,6 +80,8 @@ function getAccessKeys(req, res) {
 }
 
 // POST /accessKeys - Create a new access key
+// Access keys are always static - validates all scenarios but doesn't save
+// Matches real implementation: creates new access key with generated ID
 function postAccessKeys(req, res) {
   const accountId = getUserId(req);
   if (!accountId) {
@@ -88,17 +90,17 @@ function postAccessKeys(req, res) {
 
   const accessKeyRequest = req.body;
 
-  // Generate name if not provided
+  // Generate name if not provided (matches real implementation)
   if (!accessKeyRequest.name) {
     accessKeyRequest.name = generateSecureKey(accountId);
   }
 
-  // Set createdBy from IP if not provided
+  // Set createdBy from IP if not provided (matches real implementation)
   if (!accessKeyRequest.createdBy) {
     accessKeyRequest.createdBy = getIpAddress(req);
   }
 
-  // Validate required fields
+  // Validate required fields (matches real implementation)
   const validationErrors = [];
   
   if (!isValidKeyField(accessKeyRequest.name)) {
@@ -121,7 +123,7 @@ function postAccessKeys(req, res) {
     return res.status(400).json(validationErrors);
   }
 
-  // Check for duplicates
+  // Check for duplicates (matches real implementation behavior)
   const existingKeys = db.getAccessKeys(accountId);
   if (isDuplicate(existingKeys, accessKeyRequest.name)) {
     return res.status(409).json({ error: `The access key "${accessKeyRequest.name}" already exists.` });
@@ -131,10 +133,12 @@ function postAccessKeys(req, res) {
     return res.status(409).json({ error: `The access key "${accessKeyRequest.friendlyName}" already exists.` });
   }
 
-  // Create access key
+  // Access keys are static - validate all scenarios but don't save
+  // Generate mock access key data (matching real implementation)
   const createdTime = Date.now();
   const ttl = accessKeyRequest.ttl || DEFAULT_ACCESS_KEY_EXPIRY;
   const expires = createdTime + ttl;
+  const mockAccessKeyId = `accesskey-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
   const accessKey = {
     name: accessKeyRequest.name,
@@ -144,19 +148,12 @@ function postAccessKeys(req, res) {
     expires: expires,
     createdBy: accessKeyRequest.createdBy,
     scope: accessKeyRequest.scope || 'All',
-    isSession: accessKeyRequest.isSession || false
-  };
-
-  const accessKeyId = db.addAccessKey(accountId, accessKey);
-
-  // Return access key (without internal id)
-  const restAccessKey = {
-    ...accessKey,
-    id: accessKeyId
+    isSession: accessKeyRequest.isSession || false,
+    id: mockAccessKeyId
   };
 
   res.setHeader('Location', `/accessKeys/${accessKey.friendlyName}`);
-  return res.status(201).json({ accessKey: restAccessKey });
+  return res.status(201).json({ accessKey: accessKey });
 }
 
 // GET /accessKeys/:accessKeyName - Get a specific access key
@@ -183,6 +180,7 @@ function getAccessKey(req, res) {
 }
 
 // PATCH /accessKeys/:accessKeyName - Update an access key
+// Access keys are always static - validates all scenarios but doesn't update
 function patchAccessKey(req, res) {
   const accountId = getUserId(req);
   if (!accountId) {
@@ -213,47 +211,48 @@ function patchAccessKey(req, res) {
 
   // Find existing access key
   const existingKeys = db.getAccessKeys(accountId);
-  let updatedAccessKey = findByName(existingKeys, accessKeyName);
+  const accessKey = findByName(existingKeys, accessKeyName);
 
-  if (!updatedAccessKey) {
+  if (!accessKey) {
     return res.status(404).json({ error: `Access key "${accessKeyName}" does not exist.` });
   }
 
-  // Update fields
-  if (accessKeyRequest.description !== undefined) {
-    updatedAccessKey.description = accessKeyRequest.description;
-  }
+  // Access keys are static - validate all scenarios but don't update
+  // Build response with validated updates (but don't save)
+  const responseAccessKey = { ...accessKey };
 
   if (accessKeyRequest.friendlyName !== undefined) {
     // Check for duplicate friendlyName
     if (isDuplicate(existingKeys, accessKeyRequest.friendlyName) && 
-        updatedAccessKey.friendlyName !== accessKeyRequest.friendlyName) {
+        accessKey.friendlyName !== accessKeyRequest.friendlyName) {
       return res.status(409).json({ error: `The access key "${accessKeyRequest.friendlyName}" already exists.` });
     }
     
-    updatedAccessKey.friendlyName = accessKeyRequest.friendlyName;
-    updatedAccessKey.description = accessKeyRequest.friendlyName;
+    // Use new friendlyName in response (but don't save)
+    responseAccessKey.friendlyName = accessKeyRequest.friendlyName;
+    responseAccessKey.description = accessKeyRequest.friendlyName;
+  }
+
+  if (accessKeyRequest.description !== undefined) {
+    responseAccessKey.description = accessKeyRequest.description;
   }
 
   if (accessKeyRequest.scope !== undefined) {
-    updatedAccessKey.scope = accessKeyRequest.scope;
+    responseAccessKey.scope = accessKeyRequest.scope;
   }
 
   if (accessKeyRequest.ttl !== undefined) {
-    updatedAccessKey.expires = Date.now() + accessKeyRequest.ttl;
+    responseAccessKey.expires = Date.now() + accessKeyRequest.ttl;
   }
 
-  // Save updates
-  db.updateAccessKey(accountId, updatedAccessKey);
+  // Delete name from response (security)
+  delete responseAccessKey.name;
 
-  // Delete name from response
-  const restAccessKey = { ...updatedAccessKey };
-  delete restAccessKey.name;
-
-  return res.status(200).json({ accessKey: restAccessKey });
+  return res.status(200).json({ accessKey: responseAccessKey });
 }
 
 // DELETE /accessKeys/:accessKeyName - Delete an access key
+// Access keys are always static - validates all scenarios but doesn't delete
 function deleteAccessKey(req, res) {
   const accountId = getUserId(req);
   if (!accountId) {
@@ -269,12 +268,13 @@ function deleteAccessKey(req, res) {
     return res.status(404).json({ error: `Access key "${accessKeyName}" does not exist.` });
   }
 
-  db.removeAccessKey(accountId, accessKey.id);
-
+  // Access keys are static - validate all scenarios but don't delete
+  // Return success response as if access key was deleted (matches real implementation)
   return res.status(201).send('Access key deleted successfully');
 }
 
 // DELETE /sessions/:createdBy - Delete all sessions with a specific createdBy
+// Access keys are always static - validates all scenarios but doesn't delete
 function deleteSessions(req, res) {
   const accountId = getUserId(req);
   if (!accountId) {
@@ -283,12 +283,18 @@ function deleteSessions(req, res) {
 
   const createdBy = req.params.createdBy;
 
-  const removedCount = db.removeAccessKeysByCreatedBy(accountId, createdBy);
+  // Check if any sessions exist (validate scenario)
+  const existingKeys = db.getAccessKeys(accountId);
+  const sessions = existingKeys.filter(ak => 
+    ak.isSession === true && ak.createdBy === createdBy
+  );
 
-  if (removedCount === 0) {
+  if (sessions.length === 0) {
     return res.status(404).json({ error: `There are no sessions associated with "${createdBy}."` });
   }
 
+  // Access keys are static - validate all scenarios but don't delete
+  // Return success response as if sessions were deleted (matches real implementation)
   return res.status(204).send();
 }
 

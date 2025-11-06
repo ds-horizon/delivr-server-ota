@@ -1,0 +1,21 @@
+[
+  {
+    "id": "deployment-production-static",
+    "name": "Production",
+    "key": "deployment-key-1",
+    "appId": "app-testapp-static",
+    "createdTime": 1700000000000,
+    "packageHistory": [],
+    "package": null
+  },
+  {
+    "id": "deployment-staging-static",
+    "name": "Staging",
+    "key": "deployment-key-2",
+    "appId": "app-testapp-static",
+    "createdTime": 1700000000000,
+    "packageHistory": [],
+    "package": null
+  }
+]
+

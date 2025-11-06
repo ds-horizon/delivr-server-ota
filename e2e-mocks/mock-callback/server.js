@@ -178,8 +178,6 @@ app.delete('/accessKeys/:accessKeyName', accessKeysRoutes.deleteAccessKey);
 app.delete('/sessions/:createdBy', accessKeysRoutes.deleteSessions);
 app.get('/accountByaccessKeyName', accessKeysRoutes.getAccountByAccessKeyName);
 
-// (removed test-logging endpoint)
-
 // Default 404
 app.all('*', (req, res) => {
   res.status(404).json({ message: 'Not handled' });

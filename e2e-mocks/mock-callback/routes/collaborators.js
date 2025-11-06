@@ -97,18 +97,24 @@ function postCollaborator(req, res) {
     return res.status(400).json({ error: 'Invalid email format' });
   }
 
-  try {
-    db.addCollaboratorToApp(accountId, app.id, email);
-    return res.status(201).send();
-  } catch (error) {
-    if (error.message === 'The specified e-mail address doesn\'t represent a registered user') {
-      return res.status(404).json({ error: error.message });
-    }
-    if (error.message === 'The given account is already a collaborator for this app.') {
-      return res.status(409).json({ error: error.message });
-    }
-    return res.status(500).json({ error: error.message });
+  // Check if account exists (by email)
+  const targetAccount = db.accounts.find(a => a.email && a.email.toLowerCase() === email.toLowerCase());
+  if (!targetAccount) {
+    return res.status(404).json({ error: 'The specified e-mail address doesn\'t represent a registered user' });
   }
+
+  // Check if collaborator already exists (case-insensitive)
+  const existingCollab = db.collaborators.find(c => 
+    c.appId === app.id && 
+    (c.email === email || c.email.toLowerCase() === email.toLowerCase())
+  );
+  
+  if (existingCollab) {
+    return res.status(409).json({ error: 'The given account is already a collaborator for this app.' });
+  }
+
+  // Validation passed - return success without modifying database
+  return res.status(201).send();
 }
 
 // DELETE /apps/:appName/collaborators/:email - Remove a collaborator from an app
@@ -159,18 +165,23 @@ function deleteCollaborator(req, res) {
     }
   }
 
-  try {
-    db.removeCollaboratorFromApp(accountId, app.id, email);
-    return res.status(201).send('Collaborator removed successfully');
-  } catch (error) {
-    if (error.message === 'The given email is not a collaborator for this app.') {
-      return res.status(404).json({ error: error.message });
-    }
-    if (error.message === 'Cannot remove the owner of the app from collaborator list.') {
-      return res.status(409).json({ error: error.message });
-    }
-    return res.status(500).json({ error: error.message });
+  // Find the collaborator
+  const collab = db.collaborators.find(c => 
+    c.appId === app.id && 
+    (c.email === email || c.email.toLowerCase() === email.toLowerCase())
+  );
+  
+  if (!collab) {
+    return res.status(404).json({ error: 'The given email is not a collaborator for this app.' });
   }
+  
+  // Cannot remove the owner
+  if (collab.permission === 'Owner') {
+    return res.status(409).json({ error: 'Cannot remove the owner of the app from collaborator list.' });
+  }
+
+  // Validation passed - return success without modifying database
+  return res.status(201).send('Collaborator removed successfully');
 }
 
 // PATCH /apps/:appName/collaborators/:email - Change collaborator role
@@ -214,11 +225,6 @@ function patchCollaborator(req, res) {
     return res.status(403).json({ error: 'This action requires Owner permissions on the app!' });
   }
 
-  // Check if collaborator exists and get their info
-  const collaboratorsMap = db.getCollaboratorsMap(accountId, app.id);
-  const collaboratorBeingModified = collaboratorsMap[email] || 
-    Object.values(collaboratorsMap).find(c => c.email && c.email.toLowerCase() === email.toLowerCase());
-
   // Find by email in collaborators array
   const collabInDb = db.getCollaborators(app.id).find(c => 
     c.email === email || c.email.toLowerCase() === email.toLowerCase()
@@ -236,16 +242,8 @@ function patchCollaborator(req, res) {
     return res.status(409).json({ error: 'The app creator cannot change their permission from Owner to Collaborator.' });
   }
 
-  try {
-    // Update collaborator role
-    db.updateCollaboratorRole(accountId, app.id, email, role);
-    return res.status(200).send();
-  } catch (error) {
-    if (error.message === 'The given email is not a collaborator for this app.') {
-      return res.status(404).json({ error: error.message });
-    }
-    return res.status(500).json({ error: error.message });
-  }
+  // Validation passed - return success without modifying database
+  return res.status(200).send();
 }
 
 module.exports = {

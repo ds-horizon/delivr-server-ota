@@ -152,23 +152,18 @@ function postDeployment(req, res) {
     return res.status(409).json({ error: `A deployment named '${deploymentRequest.name}' already exists.` });
   }
 
-  // Create deployment
-  const deploymentData = {
-    name: deploymentRequest.name.trim(),
-    appId: app.id,
-    key: deploymentRequest.key || generateSecureKey(accountId)
-  };
+  // Generate mock deployment key (matching real implementation)
+  const mockDeploymentKey = deploymentRequest.key || generateSecureKey(accountId);
 
-  const newDeployment = db.addDeployment(deploymentData);
-
-  // Format response (remove internal fields, add package/packageHistory)
+  // Format response (matching real implementation structure)
   const restDeployment = {
-    name: newDeployment.name,
-    key: newDeployment.key,
+    name: deploymentRequest.name.trim(),
+    key: mockDeploymentKey,
     package: null,
     packageHistory: []
   };
 
+  // Validation passed - return success without modifying database
   res.setHeader('Location', `/apps/${appName}/deployments/${restDeployment.name}`);
   return res.status(201).json({ deployment: restDeployment });
 }
@@ -255,9 +250,7 @@ function deleteDeployment(req, res) {
     return res.status(404).json({ error: `Deployment "${deploymentName}" does not exist.` });
   }
 
-  // Delete deployment
-  db.deleteDeployment(app.id, deployment.id);
-
+  // Validation passed - return success without modifying database
   return res.status(201).send('Deployment deleted successfully');
 }
 
@@ -312,20 +305,26 @@ function patchDeployment(req, res) {
       return res.status(409).json({ error: `A deployment named '${deploymentRequest.name}' already exists.` });
     }
 
-    // Update deployment name
-    db.updateDeployment(app.id, existingDeployment.id, { name: deploymentRequest.name.trim() });
+    // Validation passed - use the new name in response (but don't update database)
+    const newName = deploymentRequest.name.trim();
+    
+    // Format response with potentially new name
+    const restDeployment = {
+      name: newName,
+      key: existingDeployment.key,
+      package: existingDeployment.package || null,
+      packageHistory: existingDeployment.packageHistory || []
+    };
+
+    return res.status(200).json({ deployment: restDeployment });
   }
 
-  // Get updated deployment
-  const updatedDeployments = db.getDeployments(app.id);
-  const updatedDeployment = findDeploymentByName(updatedDeployments, deploymentRequest.name || deploymentName);
-
-  // Format response
+  // No name change - return existing deployment data
   const restDeployment = {
-    name: updatedDeployment.name,
-    key: updatedDeployment.key,
-    package: updatedDeployment.package || null,
-    packageHistory: updatedDeployment.packageHistory || []
+    name: existingDeployment.name,
+    key: existingDeployment.key,
+    package: existingDeployment.package || null,
+    packageHistory: existingDeployment.packageHistory || []
   };
 
   return res.status(200).json({ deployment: restDeployment });

@@ -2,6 +2,7 @@ const db = require('../mock_data');
 const deploymentsRoutes = require('./deployments');
 const fileStorage = require('../utils/file-storage');
 const { getUserId } = require('../utils/auth');
+const semver = require('semver');
 
 // Helper: Extract tenant ID from header
 function getTenantId(req) {
@@ -88,6 +89,48 @@ function generatePackageHash() {
   return Math.random().toString(36).substr(2, 16) + Math.random().toString(36).substr(2, 16);
 }
 
+// Helper: Get last package hash with same app version (semver-aware)
+// Matches the behavior of management.ts getLastPackageHashWithSameAppVersion
+function getLastPackageHashWithSameAppVersion(history, appVersion) {
+  if (!history || !history.length) {
+    return null;
+  }
+
+  const lastPackageIndex = history.length - 1;
+  
+  // Check if appVersion is a valid semver (not a range)
+  if (!semver.valid(appVersion)) {
+    // appVersion is a range
+    const lastPackage = history[lastPackageIndex];
+    if (!lastPackage || !lastPackage.appVersion) {
+      return null;
+    }
+    
+    const oldAppVersion = lastPackage.appVersion;
+    const oldRange = semver.validRange(oldAppVersion);
+    const newRange = semver.validRange(appVersion);
+    
+    // Compare normalized ranges
+    return oldRange === newRange ? lastPackage.packageHash : null;
+  } else {
+    // appVersion is not a range - search backwards for matching version
+    for (let i = lastPackageIndex; i >= 0; i--) {
+      const packageEntry = history[i];
+      if (!packageEntry || !packageEntry.appVersion) {
+        continue;
+      }
+      
+      // Use semver.satisfies to check if appVersion matches packageEntry.appVersion
+      // This handles semver ranges in packageEntry.appVersion
+      if (semver.satisfies(appVersion, packageEntry.appVersion)) {
+        return packageEntry.packageHash;
+      }
+    }
+  }
+
+  return null;
+}
+
 // GET /apps/:appName/deployments/:deploymentName/history - Get package history
 function getHistory(req, res) {
   const accountId = getUserId(req);
@@ -148,15 +191,12 @@ async function postRelease(req, res) {
   const deploymentName = req.params.deploymentName;
   let tenantId = getTenantId(req);
   
-  // minimal parsing
-  
   // Parse appName if it contains tenant/appName format (e.g., "testOrg/testApp")
   if (appName.includes('/')) {
     const parts = appName.split('/');
     if (parts.length === 2 && !tenantId) {
       tenantId = parts[0];
       appName = parts[1];
-      // parsed
     }
   }
   
@@ -167,7 +207,6 @@ async function postRelease(req, res) {
   
   // Check if file was uploaded (multipart/form-data)
   if (req.file) {
-    // uploaded file
     uploadedFile = req.file;
     
     // Parse packageInfo from form field (if provided)
@@ -176,7 +215,6 @@ async function postRelease(req, res) {
         packageInfo = typeof req.body.packageInfo === 'string' 
           ? JSON.parse(req.body.packageInfo) 
           : req.body.packageInfo;
-        // parsed packageInfo
       } else if (req.body.appVersion || req.body.description) {
         // Support flat form fields
         packageInfo = {
@@ -187,18 +225,13 @@ async function postRelease(req, res) {
           rollout: req.body.rollout ? parseInt(req.body.rollout) : undefined,
           isBundlePatchingEnabled: req.body.isBundlePatchingEnabled === 'true' || req.body.isBundlePatchingEnabled === true,
         };
-        // parsed flat fields
-      } else {
-        // no packageInfo
       }
       
       // Save the uploaded file
       try {
-        // saving file
         fileMetadata = await fileStorage.saveFile(uploadedFile.buffer, uploadedFile.originalname);
-        // saved file
       } catch (fileError) {
-        console.error('   ❌ Error saving file:', fileError);
+        console.error('Error saving file:', fileError);
         return res.status(500).json({ error: 'Failed to save uploaded file' });
       }
     } catch (parseError) {
@@ -208,7 +241,6 @@ async function postRelease(req, res) {
   } else {
     // JSON-only request (backward compatible)
     packageInfo = req.body.packageInfo || req.body || {};
-    // json body
   }
 
   // Validate package info (appVersion is required)
@@ -225,11 +257,9 @@ async function postRelease(req, res) {
 
   // Get app
   const app = db.getAppByName(accountId, appName, tenantId);
-  // app details ok
 
   // If app exists but user doesn't have access, return 403
   if (!app) {
-    // No access to app
     return res.status(403).json({ error: 'This action requires Collaborator permissions on the app!' });
   }
 
@@ -259,8 +289,8 @@ async function postRelease(req, res) {
     packageHash = fileMetadata.hash;
     packageSize = fileMetadata.size;
     fileName = fileMetadata.fileName;
-    // Generate download URL via MockServer gateway
-    const baseUrl = process.env.MOCK_SERVER_URL || 'http://localhost:1080';
+    // Generate download URL - always use localhost (client will resolve based on platform)
+    const baseUrl = 'http://localhost:1080';
     blobUrl = `${baseUrl}${fileStorage.getDownloadUrl(fileName)}`;
   } else {
     // No file uploaded - use mock values (backward compatible)
@@ -269,53 +299,34 @@ async function postRelease(req, res) {
     blobUrl = generateBlobUrl();
   }
   
-  // Check for duplicate package hash with same app version
-  // This must happen BEFORE committing the package to history
-  // Check ALL packages with the same version and hash
+  // Check for duplicate package hash with same app version (semver-aware)
+  // This matches the real implementation behavior in management.ts
+  // Must happen BEFORE committing the package to history
   if (fileMetadata && packageHash) {
-    // Ensure packageHistory exists on deployment (deployment is already the live object from the array)
-    if (!deployment.packageHistory) {
-      deployment.packageHistory = [];
+    // Get fresh deployment reference to ensure we have latest data
+    const freshDeployment = db.getDeploymentById(deployment.id);
+    if (!freshDeployment) {
+      return res.status(404).json({ error: 'Deployment not found' });
     }
     
-    // Debug: Log what we're checking
-    console.log(`[DUPLICATE CHECK] Checking for duplicate: appVersion=${packageInfo.appVersion}, hash=${packageHash}, historyLength=${deployment.packageHistory.length}`);
-    if (deployment.packageHistory.length > 0) {
-      console.log(`[DUPLICATE CHECK] History packages:`, deployment.packageHistory.map(p => ({
-        label: p.label,
-        appVersion: p.appVersion,
-        hash: p.packageHash
-      })));
-    }
+    // Get package history using the database method to ensure we have the latest data
+    const packageHistory = db.getPackageHistory(freshDeployment.id);
     
-    // Check all packages with matching app version and hash
-    // Use strict equality for hash comparison (hash should always be a hex string)
-    const duplicatePackage = deployment.packageHistory.find(pkg => {
-      if (!pkg.appVersion || !pkg.packageHash) {
-        return false;
-      }
-      // Compare app version (should match exactly)
-      const versionMatch = String(pkg.appVersion) === String(packageInfo.appVersion);
-      // Compare hash (should match exactly - hash is always a hex string)
-      const hashMatch = String(pkg.packageHash) === String(packageHash);
-      
-      if (versionMatch && hashMatch) {
-        console.log(`[DUPLICATE CHECK] Match found: existing pkg.label=${pkg.label}, pkg.appVersion=${pkg.appVersion}, pkg.hash=${pkg.packageHash}`);
-      }
-      
-      return versionMatch && hashMatch;
-    });
+    // Get last package hash with same app version using semver matching
+    // This matches the real implementation's getLastPackageHashWithSameAppVersion function
+    const lastPackageHashWithSameAppVersion = getLastPackageHashWithSameAppVersion(
+      packageHistory,
+      packageInfo.appVersion
+    );
     
-    if (duplicatePackage) {
-      console.log(`[DUPLICATE CHECK] DUPLICATE FOUND! Existing package: label=${duplicatePackage.label}, appVersion=${duplicatePackage.appVersion}, hash=${duplicatePackage.packageHash}`);
+    // Compare with last matching package hash (matches real implementation)
+    if (packageHash === lastPackageHashWithSameAppVersion) {
       // Delete the duplicate file we just saved
       fileStorage.deleteFile(fileName);
       return res.status(409).json({ 
-        error: 'A package with the same content hash already exists for this app version.' 
+        error: 'The uploaded package was not released because it is identical to the contents of the specified deployment\'s current release.' 
       });
     }
-    
-    console.log(`[DUPLICATE CHECK] No duplicate found, proceeding with commit`);
   }
 
   // Get account for releasedBy
@@ -346,8 +357,6 @@ async function postRelease(req, res) {
   let committedPackage;
   try {
     committedPackage = db.commitPackage(deployment.id, appPackage);
-    console.log('--------------------------------');
-    console.log('committedPackage', committedPackage);
   } catch (error) {
     console.error(`Error committing package:`, error);
     return res.status(500).json({ error: error.message });
@@ -371,8 +380,6 @@ async function postRelease(req, res) {
   };
 
   res.setHeader('Location', `/apps/${appName}/deployments/${deploymentName}`);
-  console.log('--------------------------------');
-  console.log('restPackage', restPackage);
   return res.status(201).json({ package: restPackage });
 }
 

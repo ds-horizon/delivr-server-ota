@@ -38,9 +38,6 @@ function getUserId(req) {
 
 // GET /authenticated - Check if user is authenticated
 function getAuthenticated(req, res) {
-  // Debug: log headers (commented out for production)
-  // console.log('Headers:', JSON.stringify(req.headers, null, 2));
-  
   const accountId = getUserId(req);
   
   if (!accountId) {

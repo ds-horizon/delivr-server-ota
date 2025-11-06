@@ -58,6 +58,8 @@ function getApps(req, res) {
 }
 
 // POST /apps - Create a new app
+// Apps are always static - validates all scenarios but doesn't save
+// Matches real implementation: creates new app with generated ID
 function postApps(req, res) {
   const accountId = getUserId(req);
   if (!accountId) {
@@ -71,72 +73,52 @@ function postApps(req, res) {
 
   const appRequest = req.body;
   
-  // Validation: name is required
+  // Validation: name is required (matches real implementation)
   if (!appRequest || !isValidAppName(appRequest.name)) {
     return res.status(400).json([{ field: 'name', message: 'App name is required and must be a valid string' }]);
   }
 
-  // Check for duplicate app name
+  // Check for duplicate app name (matches real implementation behavior)
   if (db.isDuplicateApp(accountId, appRequest)) {
     return res.status(409).json({ error: `An app named '${appRequest.name}' already exists.` });
   }
 
-  // Handle tenant creation if tenantId is provided
+  // Handle tenant validation if tenantId is provided
   let tenantId = appRequest.tenantId || null;
   
-  // If tenantId is provided, ensure tenant exists (create if needed)
+  // If tenantId is provided, check if tenant exists in static data
   if (tenantId) {
-    let tenant = db.getTenant(tenantId);
+    const tenant = db.getTenant(tenantId);
     if (!tenant) {
-      // Create new tenant
-      tenant = db.addTenant({
-        id: tenantId,
-        displayName: appRequest.tenantName || `Organization ${tenantId}`,
-        createdBy: accountId
-      });
+      // Tenant doesn't exist in static data - return error
+      return res.status(404).json({ error: `Tenant "${tenantId}" does not exist.` });
     }
-    tenantId = tenant.id;
   }
 
-  // Create app
-  const newApp = db.addApp({
-    name: appRequest.name.trim(),
-    accountId: accountId,
-    tenantId: tenantId
-  });
+  // Apps are static - validate all scenarios but don't save
+  // Generate a mock app ID (matching real implementation which generates ID)
+  // In real implementation: app.id = shortid.generate()
+  const mockAppId = `app-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const mockCreatedTime = Date.now();
 
-  // Add owner as collaborator
-  db.addCollaborator({
-    email: account.email,
-    accountId: accountId,
-    appId: newApp.id,
-    permission: 'Owner'
-  });
-
-  // Create default deployments if not manually provisioned
+  // Determine deployment names (matches real implementation)
   let deploymentNames = [];
   if (!appRequest.manuallyProvisionDeployments) {
-    const defaultDeployments = ['Production', 'Staging'];
-    defaultDeployments.forEach(deploymentName => {
-      const deployment = db.addDeployment({
-        appId: newApp.id,
-        name: deploymentName
-      });
-      deploymentNames.push(deployment.name);
-    });
+    deploymentNames = ['Production', 'Staging'];
   }
 
-  // Set Location header
-  res.setHeader('Location', `/apps/${newApp.name}`);
+  // Set Location header (matches real implementation)
+  res.setHeader('Location', `/apps/${appRequest.name.trim()}`);
 
+  // Return success response as if app was created (matches real implementation)
   return res.status(201).json({
     app: {
-      id: newApp.id,
-      name: newApp.name,
-      displayName: newApp.name,
+      id: mockAppId,
+      name: appRequest.name.trim(),
+      displayName: appRequest.name.trim(),
       deployments: deploymentNames,
-      createdTime: newApp.createdTime,
-      tenantId: newApp.tenantId || null
+      createdTime: mockCreatedTime,
+      tenantId: tenantId || null
     }
   });
 }
@@ -177,6 +159,7 @@ function getApp(req, res) {
 }
 
 // DELETE /apps/:appName - Delete an app
+// Apps are always static - validates all scenarios but doesn't delete
 function deleteApp(req, res) {
   const accountId = getUserId(req);
   if (!accountId) {
@@ -196,13 +179,13 @@ function deleteApp(req, res) {
     return res.status(403).json({ error: 'This action requires Owner permissions on the app!' });
   }
 
-  // Delete app (and associated deployments/collaborators)
-  db.deleteApp(accountId, app.id);
-
+  // Apps are static - validate all scenarios but don't delete
+  // Return success response as if app was deleted (matches real implementation)
   return res.status(201).send('App deleted successfully');
 }
 
 // PATCH /apps/:appName - Update an app (change name)
+// Apps are always static - validates all scenarios but doesn't update
 function patchApp(req, res) {
   const accountId = getUserId(req);
   if (!accountId) {
@@ -238,25 +221,28 @@ function patchApp(req, res) {
       return res.status(409).json({ error: `An app named '${appRequest.name}' already exists.` });
     }
 
-    // Update app name
-    db.updateApp(accountId, existingApp.id, { name: appRequest.name.trim() });
+    // Apps are static - validate all scenarios but don't update
+    // Use the new name for response, but don't save to database
   }
 
   // Get deployments for response
   const appDeployments = db.getDeployments(existingApp.id);
   const deploymentNames = appDeployments.map(d => d.name);
 
-  // Get updated app
-  const updatedApp = db.getAppByName(accountId, appRequest.name || appName, tenantId);
+  // Return app with original data (or new name in response if validated)
+  // Apps are static, so we return the existing app data
+  const responseAppName = (appRequest.name !== undefined && appRequest.name !== existingApp.name && isValidAppName(appRequest.name))
+    ? appRequest.name.trim()
+    : existingApp.name;
 
   return res.status(200).json({
     app: {
-      id: updatedApp.id,
-      name: updatedApp.name,
-      displayName: updatedApp.name,
+      id: existingApp.id,
+      name: responseAppName,
+      displayName: responseAppName,
       deployments: deploymentNames,
-      createdTime: updatedApp.createdTime,
-      tenantId: updatedApp.tenantId || null
+      createdTime: existingApp.createdTime,
+      tenantId: existingApp.tenantId || null
     }
   });
 }

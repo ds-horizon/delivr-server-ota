@@ -148,12 +148,7 @@ function updateCheck(req, res) {
   // Get package history
   const packageHistory = db.getPackageHistory(deployment.id);
   
-  // (silenced verbose package history logs)
-  
   if (!packageHistory || packageHistory.length === 0) {
-    if ((process.env.LOG_LEVEL || '').toLowerCase() === 'debug') {
-      // No packages for this app
-    }
     // No packages, return no update
     const noUpdate = {
       updateInfo: {
@@ -175,11 +170,8 @@ function updateCheck(req, res) {
   let shouldMakeUpdateMandatory = false;
 
   // Search from newest to oldest (reverse order)
-  // (silenced detailed scan logs)
   for (let i = packageHistory.length - 1; i >= 0; i--) {
     const pkg = packageHistory[i];
-    
-    // (scan details removed)
     
     // Check if this is the package the client is currently running
     // Note: If both label and packageHash are missing from request,
@@ -189,28 +181,23 @@ function updateCheck(req, res) {
       (label && pkg.label === label) ||
       (!label && packageHash && pkg.packageHash === packageHash);
     
-    // (verbose match logs removed)
-    
     foundRequestPackageInHistory = foundRequestPackageInHistory || isCurrentPackage ||
       (!label && !packageHash); // If both missing, we'll treat as "found" after we get latest
 
     // Skip disabled packages
     if (pkg.isDisabled) {
-      // skip disabled
       continue;
     }
 
     // Track latest enabled package (first non-disabled package we encounter)
     if (!latestEnabledPackage) {
       latestEnabledPackage = pkg;
-      // mark latest enabled
     }
 
     // Check if package satisfies appVersion (or ignore if isCompanion)
     const satisfiesAppVersion = isCompanion || semverSatisfies(appVersion, pkg.appVersion);
     
     if (!satisfiesAppVersion) {
-      // doesn't satisfy
       continue; // Skip packages that don't satisfy appVersion
     }
 
@@ -223,25 +210,21 @@ function updateCheck(req, res) {
     // This package satisfies appVersion - track it
     if (!latestSatisfyingPackage) {
       latestSatisfyingPackage = pkg;
-      // mark latest satisfying
     }
 
     // If we found the client's current package, stop scanning
     // All packages further down are older than what the client has
     if (isCurrentPackage) {
-      // found current
       break;
     }
 
     // If this package is mandatory and is newer than what client has,
-    // mark the update as mandatory and stop (we have all info needed)
+    // mark the update as mandatory and stop
     if (pkg.isMandatory) {
       shouldMakeUpdateMandatory = true;
       break;
     }
   }
-  
-  // (silenced scan summary)
 
   // Build response - matches original server structure
   const updateInfo = {
@@ -289,7 +272,6 @@ function updateCheck(req, res) {
     updateInfo.isBundlePatchingEnabled = latestEnabledPackage.isBundlePatchingEnabled || false;
 
     const response = { updateInfo: updateInfo };
-    // minimal
     return res.status(200).send(newApi ? convertToSnakeCase(response) : response);
   }
 
