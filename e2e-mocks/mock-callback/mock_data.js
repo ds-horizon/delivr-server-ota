@@ -681,6 +681,19 @@ clearPackageHistory: (deploymentId) => {
   },
 
   /**
+   * Reset only releases (packageHistory) - keeps accounts, apps, and deployments
+   * Useful for test isolation - clears releases between tests without losing setup data
+   */
+  resetReleases: () => {
+    // Clear packageHistory for all deployments
+    deployments.forEach(deployment => {
+      deployment.packageHistory = [];
+      deployment.package = null;
+    });
+    console.log('✅ Reset releases for all deployments');
+  },
+
+  /**
    * Initialize pre-configured test data
    * Creates default account, tenant, app, and deployment for testing
    * This data is automatically created when the server starts
@@ -708,6 +721,16 @@ clearPackageHistory: (deploymentId) => {
     // Get test account ID (from static data or fallback)
     const testAccountId = accounts.length > 0 ? accounts[0].id : 'test-user';
     const testAccount = accounts[0];
+
+    // 1b. Create playwright test account
+    const playwrightAccountId = 'test-user-playwright';
+    const playwrightAccount = {
+      id: playwrightAccountId,
+      name: 'Playwright Test User',
+      email: 'playwright@example.com',
+      linkedProviders: []
+    };
+    accounts.push(playwrightAccount);
 
     // 2. Load tenants from static data file
     const staticTenants = loadStaticTenants();
@@ -780,6 +803,57 @@ clearPackageHistory: (deploymentId) => {
       };
       deployments.push(stagingDeployment);
     }
+
+    // 7. Create playwright test org/app/deployments
+    const playwrightTenantId = 'test-org-1';
+    const playwrightTenant = {
+      id: playwrightTenantId,
+      displayName: 'test-org-1',
+      createdBy: playwrightAccountId,
+      createdAt: Date.now()
+    };
+    tenants.push(playwrightTenant);
+
+    const playwrightAppName = 'TestApp';
+    const playwrightApp = {
+      id: generateId('app'),
+      name: playwrightAppName,
+      accountId: playwrightAccountId,
+      tenantId: playwrightTenantId,
+      createdTime: Date.now()
+    };
+    apps.push(playwrightApp);
+
+    // Create deployments for playwright app
+    const playwrightProdDeployment = {
+      id: generateId('deployment'),
+      name: 'Production',
+      key: 'playwright-prod-key',
+      appId: playwrightApp.id,
+      createdTime: Date.now(),
+      packageHistory: [],
+      package: null
+    };
+    deployments.push(playwrightProdDeployment);
+
+    const playwrightStagingDeployment = {
+      id: generateId('deployment'),
+      name: 'Staging',
+      key: 'playwright-staging-key',
+      appId: playwrightApp.id,
+      createdTime: Date.now(),
+      packageHistory: [],
+      package: null
+    };
+    deployments.push(playwrightStagingDeployment);
+
+    // Add playwright user as owner collaborator
+    collaborators.push({
+      email: playwrightAccount.email,
+      accountId: playwrightAccountId,
+      appId: playwrightApp.id,
+      permission: 'Owner'
+    });
 
     // 5. Load collaborators from static data file
     const staticCollaborators = loadStaticCollaborators();

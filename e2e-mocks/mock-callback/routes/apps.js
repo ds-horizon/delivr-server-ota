@@ -37,17 +37,25 @@ function getApps(req, res) {
   const tenantId = getTenantId(req);
   const apps = db.getApps(accountId, tenantId);
 
-  // Get deployments for each app
+  // Get deployments for each app and include role/permission
   const appsWithDeployments = apps.map(app => {
     const appDeployments = db.getDeployments(app.id);
     const deploymentNames = appDeployments.map(d => d.name);
+    
+    // Get user's permission for this app (Owner or Collaborator)
+    const collab = db.getCollaboratorForApp(accountId, app.id);
+    const role = collab?.permission || 'Admin';
+    const isAdmin = collab?.permission === 'Owner';
+    
     return {
       id: app.id,
       name: app.name,
       displayName: app.name,
       deployments: deploymentNames,
       createdTime: app.createdTime,
-      tenantId: app.tenantId || null
+      tenantId: app.tenantId || null,
+      role: role, // Add role field
+      isAdmin: isAdmin, // Add isAdmin field (used for delete menu visibility)
     };
   });
 
