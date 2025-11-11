@@ -67,6 +67,15 @@ function createTenant(req, res) {
   }
 
   try {
+    // Check for duplicate organization name
+    const duplicateTenant = db.getTenantByName(orgName);
+    
+    if (duplicateTenant) {
+      return res.status(409).json({ 
+        error: `Organization "${orgName}" already exists.` 
+      });
+    }
+
     // Create tenant (addTenant generates the ID)
     const newTenant = db.addTenant({
       displayName: orgName,

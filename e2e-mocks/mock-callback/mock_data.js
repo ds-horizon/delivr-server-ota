@@ -456,6 +456,12 @@ module.exports = {
     return newTenant;
   },
   getTenant: (tenantId) => tenants.find(t => t.id === tenantId),
+  getTenantByName: (displayName) => {
+    if (!displayName) return null;
+    return tenants.find(t => 
+      t.displayName && t.displayName.toLowerCase() === displayName.trim().toLowerCase()
+    );
+  },
   getTenants: (accountId) => {
     // Get all tenants where user has access via apps (as collaborator/owner)
     // Find all apps where user is a collaborator
