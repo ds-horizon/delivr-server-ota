@@ -1,0 +1,15 @@
+[
+  {
+    "id": "accesskey-testuser-static",
+    "name": "cli-test-user",
+    "friendlyName": "test-user",
+    "accountId": "test-user",
+    "expires": 1735689600000,
+    "createdTime": 1700000000000,
+    "isSession": false,
+    "createdBy": "test-user",
+    "scope": null,
+    "description": "test-user"
+  }
+]
+

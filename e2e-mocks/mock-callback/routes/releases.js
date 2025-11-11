@@ -2,6 +2,7 @@ const db = require('../mock_data');
 const deploymentsRoutes = require('./deployments');
 const fileStorage = require('../utils/file-storage');
 const { getUserId } = require('../utils/auth');
+const semver = require('semver');
 
 // Helper: Extract tenant ID from header
 function getTenantId(req) {
@@ -64,7 +65,12 @@ function validatePackageInfo(packageInfo, allOptional = false) {
   if (packageInfo.isMandatory !== undefined && !isValidBoolean(packageInfo.isMandatory)) {
     errors.push({ field: 'isMandatory', message: 'Field is invalid' });
   }
-  
+  if (
+    packageInfo.isBundlePatchingEnabled !== undefined &&
+    !isValidBoolean(packageInfo.isBundlePatchingEnabled)
+  ) {
+    errors.push({ field: 'isBundlePatchingEnabled', message: 'Field is invalid' });
+  }
   return errors;
 }
 
@@ -81,6 +87,48 @@ function generateBlobUrl() {
 // Helper: Generate mock package hash
 function generatePackageHash() {
   return Math.random().toString(36).substr(2, 16) + Math.random().toString(36).substr(2, 16);
+}
+
+// Helper: Get last package hash with same app version (semver-aware)
+// Matches the behavior of management.ts getLastPackageHashWithSameAppVersion
+function getLastPackageHashWithSameAppVersion(history, appVersion) {
+  if (!history || !history.length) {
+    return null;
+  }
+
+  const lastPackageIndex = history.length - 1;
+  
+  // Check if appVersion is a valid semver (not a range)
+  if (!semver.valid(appVersion)) {
+    // appVersion is a range
+    const lastPackage = history[lastPackageIndex];
+    if (!lastPackage || !lastPackage.appVersion) {
+      return null;
+    }
+    
+    const oldAppVersion = lastPackage.appVersion;
+    const oldRange = semver.validRange(oldAppVersion);
+    const newRange = semver.validRange(appVersion);
+    
+    // Compare normalized ranges
+    return oldRange === newRange ? lastPackage.packageHash : null;
+  } else {
+    // appVersion is not a range - search backwards for matching version
+    for (let i = lastPackageIndex; i >= 0; i--) {
+      const packageEntry = history[i];
+      if (!packageEntry || !packageEntry.appVersion) {
+        continue;
+      }
+      
+      // Use semver.satisfies to check if appVersion matches packageEntry.appVersion
+      // This handles semver ranges in packageEntry.appVersion
+      if (semver.satisfies(appVersion, packageEntry.appVersion)) {
+        return packageEntry.packageHash;
+      }
+    }
+  }
+
+  return null;
 }
 
 // GET /apps/:appName/deployments/:deploymentName/history - Get package history
@@ -143,15 +191,12 @@ async function postRelease(req, res) {
   const deploymentName = req.params.deploymentName;
   let tenantId = getTenantId(req);
   
-  // minimal parsing
-  
   // Parse appName if it contains tenant/appName format (e.g., "testOrg/testApp")
   if (appName.includes('/')) {
     const parts = appName.split('/');
     if (parts.length === 2 && !tenantId) {
       tenantId = parts[0];
       appName = parts[1];
-      // parsed
     }
   }
   
@@ -162,7 +207,6 @@ async function postRelease(req, res) {
   
   // Check if file was uploaded (multipart/form-data)
   if (req.file) {
-    // uploaded file
     uploadedFile = req.file;
     
     // Parse packageInfo from form field (if provided)
@@ -171,7 +215,6 @@ async function postRelease(req, res) {
         packageInfo = typeof req.body.packageInfo === 'string' 
           ? JSON.parse(req.body.packageInfo) 
           : req.body.packageInfo;
-        // parsed packageInfo
       } else if (req.body.appVersion || req.body.description) {
         // Support flat form fields
         packageInfo = {
@@ -179,20 +222,16 @@ async function postRelease(req, res) {
           description: req.body.description,
           isMandatory: req.body.isMandatory === 'true' || req.body.isMandatory === true,
           isDisabled: req.body.isDisabled === 'true' || req.body.isDisabled === true,
-          rollout: req.body.rollout ? parseInt(req.body.rollout) : undefined
+          rollout: req.body.rollout ? parseInt(req.body.rollout) : undefined,
+          isBundlePatchingEnabled: req.body.isBundlePatchingEnabled === 'true' || req.body.isBundlePatchingEnabled === true,
         };
-        // parsed flat fields
-      } else {
-        // no packageInfo
       }
       
       // Save the uploaded file
       try {
-        // saving file
         fileMetadata = await fileStorage.saveFile(uploadedFile.buffer, uploadedFile.originalname);
-        // saved file
       } catch (fileError) {
-        console.error('   ❌ Error saving file:', fileError);
+        console.error('Error saving file:', fileError);
         return res.status(500).json({ error: 'Failed to save uploaded file' });
       }
     } catch (parseError) {
@@ -202,7 +241,6 @@ async function postRelease(req, res) {
   } else {
     // JSON-only request (backward compatible)
     packageInfo = req.body.packageInfo || req.body || {};
-    // json body
   }
 
   // Validate package info (appVersion is required)
@@ -219,11 +257,9 @@ async function postRelease(req, res) {
 
   // Get app
   const app = db.getAppByName(accountId, appName, tenantId);
-  // app details ok
 
   // If app exists but user doesn't have access, return 403
   if (!app) {
-    // No access to app
     return res.status(403).json({ error: 'This action requires Collaborator permissions on the app!' });
   }
 
@@ -242,10 +278,6 @@ async function postRelease(req, res) {
     });
   }
 
-  // Get package history to check for duplicate
-  const history = db.getPackageHistory(deployment.id);
-  // history size not logged
-  
   // Get package hash - use actual hash if file uploaded, otherwise generate mock
   let packageHash;
   let packageSize;
@@ -257,28 +289,44 @@ async function postRelease(req, res) {
     packageHash = fileMetadata.hash;
     packageSize = fileMetadata.size;
     fileName = fileMetadata.fileName;
-    // Generate download URL via MockServer gateway
-    const baseUrl = process.env.MOCK_SERVER_URL || 'http://localhost:1080';
+    // Generate download URL - always use localhost (client will resolve based on platform)
+    const baseUrl = 'http://localhost:1080';
     blobUrl = `${baseUrl}${fileStorage.getDownloadUrl(fileName)}`;
-    
-    // Check for duplicate package hash with same app version
-    const lastPackageWithSameVersion = history
-      .slice()
-      .reverse()
-      .find(pkg => pkg.appVersion === packageInfo.appVersion);
-    
-    if (lastPackageWithSameVersion && lastPackageWithSameVersion.packageHash === packageHash) {
-      // Delete the duplicate file we just saved
-      fileStorage.deleteFile(fileName);
-      return res.status(409).json({ 
-        error: 'A package with the same content hash already exists for this app version.' 
-      });
-    }
   } else {
     // No file uploaded - use mock values (backward compatible)
     packageHash = generatePackageHash();
     packageSize = packageInfo.size || 1024;
     blobUrl = generateBlobUrl();
+  }
+  
+  // Check for duplicate package hash with same app version (semver-aware)
+  // This matches the real implementation behavior in management.ts
+  // Must happen BEFORE committing the package to history
+  if (fileMetadata && packageHash) {
+    // Get fresh deployment reference to ensure we have latest data
+    const freshDeployment = db.getDeploymentById(deployment.id);
+    if (!freshDeployment) {
+      return res.status(404).json({ error: 'Deployment not found' });
+    }
+    
+    // Get package history using the database method to ensure we have the latest data
+    const packageHistory = db.getPackageHistory(freshDeployment.id);
+    
+    // Get last package hash with same app version using semver matching
+    // This matches the real implementation's getLastPackageHashWithSameAppVersion function
+    const lastPackageHashWithSameAppVersion = getLastPackageHashWithSameAppVersion(
+      packageHistory,
+      packageInfo.appVersion
+    );
+    
+    // Compare with last matching package hash (matches real implementation)
+    if (packageHash === lastPackageHashWithSameAppVersion) {
+      // Delete the duplicate file we just saved
+      fileStorage.deleteFile(fileName);
+      return res.status(409).json({ 
+        error: 'The uploaded package was not released because it is identical to the contents of the specified deployment\'s current release.' 
+      });
+    }
   }
 
   // Get account for releasedBy
@@ -301,7 +349,8 @@ async function postRelease(req, res) {
     releasedBy: account.email,
     releaseMethod: 'Upload',
     manifestBlobUrl: null,
-    fileName: fileName
+    fileName: fileName,
+    isBundlePatchingEnabled: packageInfo.isBundlePatchingEnabled !== undefined ? packageInfo.isBundlePatchingEnabled : false,
   };
 
   // Commit package
@@ -326,7 +375,8 @@ async function postRelease(req, res) {
     size: committedPackage.size,
     uploadTime: committedPackage.uploadTime,
     releasedBy: committedPackage.releasedBy,
-    releaseMethod: committedPackage.releaseMethod
+    releaseMethod: committedPackage.releaseMethod,
+    isBundlePatchingEnabled: committedPackage.isBundlePatchingEnabled,
   };
 
   res.setHeader('Location', `/apps/${appName}/deployments/${deploymentName}`);
@@ -493,7 +543,8 @@ function patchRelease(req, res) {
     size: packageToUpdate.size,
     uploadTime: packageToUpdate.uploadTime,
     releasedBy: packageToUpdate.releasedBy,
-    releaseMethod: packageToUpdate.releaseMethod || 'Upload'
+    releaseMethod: packageToUpdate.releaseMethod || 'Upload',
+    isBundlePatchingEnabled: packageToUpdate.isBundlePatchingEnabled,
   };
 
   return res.status(200).json({ package: restPackage });
