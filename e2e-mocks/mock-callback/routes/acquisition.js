@@ -355,20 +355,26 @@ function simpleHash(str) {
   return Math.abs(hash);
 }
 
-// Convert camelCase to snake_case
 function convertToSnakeCase(obj) {
   if (obj === null || typeof obj !== 'object') {
     return obj;
   }
-
   if (Array.isArray(obj)) {
     return obj.map(item => convertToSnakeCase(item));
   }
-
   const result = {};
   for (const key in obj) {
     if (obj.hasOwnProperty(key)) {
-      const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+      let snakeKey = key;
+      // :white_check_mark: Acronym-safe rewrite: treat URL suffix as a single word
+      snakeKey = snakeKey.replace(/URL$/, 'Url');
+      // :white_check_mark: Standard camelCase → snake_case
+      snakeKey = snakeKey
+        .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+        .replace(/([A-Z]+)([A-Z][a-z0-9]+)/g, '$1_$2')
+        .toLowerCase();
+      // :white_check_mark: Defensive cleanup for edge cases
+      snakeKey = snakeKey.replace(/_u_r_l/g, '_url');
       result[snakeKey] = convertToSnakeCase(obj[key]);
     }
   }
