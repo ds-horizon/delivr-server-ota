@@ -33,6 +33,7 @@
 ## 📦 Installation and development setup
 
 - Refer to [this doc](docs/DEV_SETUP.md) for installation and development setup.
+- For testing with **Mock Server**, see the [E2E Mocks Getting Started Guide](e2e-mocks/GETTING_STARTED.md).
 
 ---
 

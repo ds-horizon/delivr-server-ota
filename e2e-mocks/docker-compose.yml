@@ -5,7 +5,7 @@ services:
     image: mockserver/mockserver:5.12.0
     restart: always
     ports:
-      - "1080:1080"
+      - "${MOCKSERVER_PORT}:1080"
     environment:
       MOCKSERVER_LOG_LEVEL: INFO
       MOCKSERVER_PERSIST_EXPECTATIONS: "true"
@@ -14,7 +14,7 @@ services:
     build: ./mock-callback
     container_name: mock-callback
     ports:
-      - "3001:3001"
+      - "${MOCK_CALLBACK_PORT}:3001"
     environment:
       PORT: 3001
     volumes:

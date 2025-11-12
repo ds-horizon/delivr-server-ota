@@ -1,10 +1,52 @@
 # Getting Started with CodePush Mock APIs
 
-This guide will help you set up the CodePush mock API server.
+This guide will help you set up the mock API server.
 
 ## Prerequisites
 
 - **Docker** and **Docker Compose** installed
+
+## Configuration
+
+The mock services use environment variables for configuration defined in the `.env` file.
+
+### Default Ports
+
+The `.env` file contains the default port configuration:
+- **MockServer**: port 1080
+- **mock-callback**: port 3001
+
+### Customizing Ports
+
+**Option 1: Edit the `.env` file**
+
+Customize the values in the `.env` file:
+```bash
+# Edit .env to change port values
+vi .env  # or use your preferred editor
+```
+
+**Option 2: Set environment variables**
+
+```bash
+export MOCKSERVER_PORT=1080
+export MOCK_CALLBACK_PORT=3001
+docker-compose up -d
+```
+
+**Option 3: Inline environment variables**
+
+```bash
+MOCKSERVER_PORT=1080 MOCK_CALLBACK_PORT=3001 docker-compose up -d
+```
+
+### Available Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MOCKSERVER_PORT` | 1080 | Port for MockServer API gateway |
+| `MOCKSERVER_HOST` | localhost | Host for MockServer (used by scripts) |
+| `MOCK_CALLBACK_PORT` | 3001 | Port for mock-callback service |
 
 ## Quick Start
 
@@ -13,7 +55,7 @@ This guide will help you set up the CodePush mock API server.
 Navigate to the `e2e-mocks` directory and start the services:
 
 ```bash
-cd code-push-server/e2e-mocks
+cd delivr-server-ota/e2e-mocks
 docker-compose up -d
 ```
 
