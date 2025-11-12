@@ -6,24 +6,24 @@ This guide will help you set up the mock API server.
 
 - **Docker** and **Docker Compose** installed
 
-## Configuration
+## Configuration 
 
-The mock services use environment variables for configuration defined in the `.env` file.
+The mock services use environment variables for configuration. Default values are provided, so configuration is optional.
 
-### Default Ports
+### Using Default Ports
 
-The `.env` file contains the default port configuration:
+No configuration needed! Just run `docker-compose up -d` and the services will use:
 - **MockServer**: port 1080
 - **mock-callback**: port 3001
 
 ### Customizing Ports
 
-**Option 1: Edit the `.env` file**
+**Option 1: Create a `.env` file**
 
-Customize the values in the `.env` file:
+Copy the template and customize:
 ```bash
+cp env.template .env
 # Edit .env to change port values
-vi .env  # or use your preferred editor
 ```
 
 **Option 2: Set environment variables**

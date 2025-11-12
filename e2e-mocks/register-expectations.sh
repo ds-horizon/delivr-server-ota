@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Configuration from environment variables
-MOCKSERVER_HOST="${MOCKSERVER_HOST}"
-MOCKSERVER_PORT="${MOCKSERVER_PORT}"
+MOCKSERVER_HOST="${MOCKSERVER_HOST:-localhost}"
+MOCKSERVER_PORT="${MOCKSERVER_PORT:-1080}"
 MOCKSERVER_URL="http://${MOCKSERVER_HOST}:${MOCKSERVER_PORT}"
 
 echo "Using MockServer at: ${MOCKSERVER_URL}"
