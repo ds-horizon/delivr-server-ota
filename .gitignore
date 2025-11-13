@@ -53,3 +53,6 @@ __queuestorage__
 
 # VS Code settings
 .vscode/
+
+# E2E mocks
+e2e-mocks/packages/
