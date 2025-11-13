@@ -265,7 +265,8 @@ module.exports = {
       ...appPackage,
       label: label,
       uploadTime: appPackage.uploadTime || Date.now(),
-      releaseMethod: appPackage.releaseMethod || 'Upload'
+      releaseMethod: appPackage.releaseMethod || 'Upload',
+      isBundlePatchingEnabled: appPackage.isBundlePatchingEnabled || false
     };
     
     // Add to history
@@ -291,11 +292,15 @@ module.exports = {
     for (let i = deployment.packageHistory.length - 1; i >= 0; i--) {
       if (deployment.packageHistory[i].label === label) {
         // Update package
-        Object.assign(deployment.packageHistory[i], updates);
+        const updatedData = {
+          ...updates,
+          isBundlePatchingEnabled: updates.isBundlePatchingEnabled || false,
+        };
+        Object.assign(deployment.packageHistory[i], updatedData);
         
         // Update current package if it's the same
         if (deployment.package && deployment.package.label === label) {
-          Object.assign(deployment.package, updates);
+          Object.assign(deployment.package, updatedData);
         }
         
         return deployment.packageHistory[i];

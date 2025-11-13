@@ -64,7 +64,10 @@ function validatePackageInfo(packageInfo, allOptional = false) {
   if (packageInfo.isMandatory !== undefined && !isValidBoolean(packageInfo.isMandatory)) {
     errors.push({ field: 'isMandatory', message: 'Field is invalid' });
   }
-  
+
+  if (packageInfo.isBundlePatchingEnabled !== undefined && !isValidBoolean(packageInfo.isBundlePatchingEnabled)) {
+    errors.push({ field: 'isBundlePatchingEnabled', message: 'Field is invalid' });
+  }
   return errors;
 }
 
@@ -179,7 +182,8 @@ async function postRelease(req, res) {
           description: req.body.description,
           isMandatory: req.body.isMandatory === 'true' || req.body.isMandatory === true,
           isDisabled: req.body.isDisabled === 'true' || req.body.isDisabled === true,
-          rollout: req.body.rollout ? parseInt(req.body.rollout) : undefined
+          rollout: req.body.rollout ? parseInt(req.body.rollout) : undefined,
+          isBundlePatchingEnabled: req.body.isBundlePatchingEnabled === 'true' || req.body.isBundlePatchingEnabled === true,
         };
         // parsed flat fields
       } else {
@@ -301,7 +305,8 @@ async function postRelease(req, res) {
     releasedBy: account.email,
     releaseMethod: 'Upload',
     manifestBlobUrl: null,
-    fileName: fileName
+    fileName: fileName,
+    isBundlePatchingEnabled: packageInfo.isBundlePatchingEnabled !== undefined ? packageInfo.isBundlePatchingEnabled : false,
   };
 
   // Commit package
@@ -326,7 +331,8 @@ async function postRelease(req, res) {
     size: committedPackage.size,
     uploadTime: committedPackage.uploadTime,
     releasedBy: committedPackage.releasedBy,
-    releaseMethod: committedPackage.releaseMethod
+    releaseMethod: committedPackage.releaseMethod,
+    isBundlePatchingEnabled: committedPackage.isBundlePatchingEnabled,
   };
 
   res.setHeader('Location', `/apps/${appName}/deployments/${deploymentName}`);
@@ -493,7 +499,8 @@ function patchRelease(req, res) {
     size: packageToUpdate.size,
     uploadTime: packageToUpdate.uploadTime,
     releasedBy: packageToUpdate.releasedBy,
-    releaseMethod: packageToUpdate.releaseMethod || 'Upload'
+    releaseMethod: packageToUpdate.releaseMethod || 'Upload',
+    isBundlePatchingEnabled: packageToUpdate.isBundlePatchingEnabled,
   };
 
   return res.status(200).json({ package: restPackage });
